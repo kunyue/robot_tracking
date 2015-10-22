@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="robot_tracking" type="robot_tracking" name="robot_tracking" output="screen">
+        <remap from="~image" to="/color_camera/image_raw"/>
+        <remap from="~odom"  to="/odom"/>
+    </node>
+</launch>
