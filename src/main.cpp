@@ -68,36 +68,59 @@ int main(int argc, char **argv)
     ros::Subscriber s1 = n.subscribe("odom", 100, odom_callback);
     ros::Publisher  p1 = n.advertise<geometry_msgs::PoseStamped>("robot", 100);
     cout << "read camera info" << endl;
-    char cm[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/camera.yml";
-    char red[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/color_red_bluefox.yml";
-    char green[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/color_green_bluefox.yml";
-    init_rotation();
+    char cm[1024];
+    char red[1024];
+    char green[1024];
+    string ccm, rred, ggreen;
+    bool image_view = false;
+    n.getParam("cam_cal_file", ccm);
+    n.getParam("red_thr_file", rred);
+    n.getParam("green_thr_file", ggreen);
+    n.getParam("show_image", image_view);
+    cout << "cam_cal: " << ccm << endl;
+    cout << "red_thr: " << rred << endl;
+    cout << "green_thr: " << ggreen << endl;
+    cout << "image_show: " << image_view << endl;
+    std::strcpy(cm, ccm.c_str());
+    std::strcpy(red, rred.c_str());
+    std::strcpy(green, ggreen.c_str());
     int ret = robotTrackInit(cm, red, green);
-    cout << "end" << endl;
     if (ret != 0)
         cout << "fail to read file" << endl;
+    init_rotation();
     ros::Rate loop(60);
     std::vector<Eigen::Vector3d> robotPosition;//normalized position
     while (n.ok())
     {
         if (image_ready)
         {
-            ros::Time t1 = ros::Time::now();
             image_ready = false;
             robotPosition = robotTrack(image);
-            for (uint32_t i = 0; i < robotPosition.size(); i++)
+            //for (uint32_t i = 0; i < robotPosition.size(); i++)
+            //{
+            //    cout << "robot " << i << endl;
+            //    cout << "robot normalized: " << robotPosition[i].transpose() << endl;
+            //    cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
+            //}
+            if (robotPosition.size() >= 1)
             {
-                cout << "robot " << i << endl;
-                cout << "robot normalized: " << robotPosition[i].transpose() << endl;
-                cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
+                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0]);
+                geometry_msgs::PoseStamped  robot;
+                robot.header.stamp = tImage;
+                robot.header.frame_id = "irobot";
+                robot.pose.position.x = rob_pos.x();
+                robot.pose.position.y = rob_pos.y();
+                robot.pose.position.z = rob_pos.z();
+                p1.publish(robot);
             }
-            imshow("frame", image);
-            ros::Time t2 = ros::Time::now();
-            cout << "time consumption: " << (t2-t1).toSec() << " \t hz: " << 1 / (t2-t1).toSec() << endl;
-            char key = waitKey(30);
-            if (key == 27)
+            if (image_view)
             {
-                break;
+                imshow("frame", image);
+                char key = waitKey(30);
+                if (key == 27)
+                {
+                    break;
+                }
             }
         }
         loop.sleep();
