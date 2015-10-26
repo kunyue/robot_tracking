@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include "include/robotTracking.h"
@@ -43,7 +44,7 @@ void init_rotation(void)
 {
     Rc2b = Eigen::AngleAxisd(-0.5 * M_PI, Vector3d::UnitZ()) * Eigen::AngleAxisd(M_PI, Vector3d::UnitX());
     Ri2w = Rc2b;
-    cam_off_b << 0.1, 0., -0.1;
+    cam_off_b << -0.08, 0.07, -0.10;
 }
 Vector3d get_robot_position(Vector3d position)
 {
@@ -87,6 +88,20 @@ int main(int argc, char **argv)
     int ret = robotTrackInit(cm, red, green);
     if (ret != 0)
         cout << "fail to read file" << endl;
+
+    double invalid_pos_x, invalid_pos_y, invalid_pos_z;
+    n.param("invalid_pos_x", invalid_pos_x, -1.0);
+    n.param("invalid_pos_y", invalid_pos_y, -1.0);
+    n.param("invalid_pos_z", invalid_pos_z, -1.0);
+    
+
+    if (image_view)
+    {
+        image_transport::ImageTransport it(n);
+        image_transport::Publisher vis_pub = it.advertise("vis_img", 1);
+    }
+    
+
     init_rotation();
     ros::Rate loop(60);
     std::vector<Eigen::Vector3d> robotPosition;//normalized position
@@ -102,17 +117,26 @@ int main(int argc, char **argv)
             //    cout << "robot normalized: " << robotPosition[i].transpose() << endl;
             //    cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
             //}
+            
+            geometry_msgs::PoseStamped  robot;
+            robot.header.stamp = tImage;
+            robot.header.frame_id = "world";
+            
             if (robotPosition.size() >= 1)
             {
                 Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0]);
-                geometry_msgs::PoseStamped  robot;
-                robot.header.stamp = tImage;
-                robot.header.frame_id = "irobot";
                 robot.pose.position.x = rob_pos.x();
                 robot.pose.position.y = rob_pos.y();
                 robot.pose.position.z = rob_pos.z();
-                p1.publish(robot);
             }
+            else // publish invalid position
+            {
+                robot.pose.position.x = invalid_pos_x;
+                robot.pose.position.y = invalid_pos_y;
+                robot.pose.position.z = invalid_pos_z;
+            }
+            p1.publish(robot);
+            
             if (image_view)
             {
                 imshow("frame", image);
@@ -120,6 +144,11 @@ int main(int argc, char **argv)
                 if (key == 27)
                 {
                     break;
+                }
+                
+                if (true)
+                {
+                    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
                 }
             }
         }
