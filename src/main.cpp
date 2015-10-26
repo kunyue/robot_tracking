@@ -118,26 +118,24 @@ int main(int argc, char **argv)
             //    cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
             //}
             
+            geometry_msgs::PoseStamped  robot;
+            robot.header.stamp = tImage;
+            robot.header.frame_id = "world";
+            
+            if (robotPosition.size() >= 1)
             {
-                geometry_msgs::PoseStamped  robot;
-                robot.header.stamp = tImage;
-                robot.header.frame_id = "irobot";
-                
-                if (robotPosition.size() >= 1)
-                {
-                    Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0]);
-                    robot.pose.position.x = rob_pos.x();
-                    robot.pose.position.y = rob_pos.y();
-                    robot.pose.position.z = rob_pos.z();
-                }
-                else // publish invalid position
-                {
-                    robot.pose.position.x = invalid_pos_x;
-                    robot.pose.position.y = invalid_pos_y;
-                    robot.pose.position.z = invalid_pos_z;
-                }
-                p1.publish(robot);
+                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0]);
+                robot.pose.position.x = rob_pos.x();
+                robot.pose.position.y = rob_pos.y();
+                robot.pose.position.z = rob_pos.z();
             }
+            else // publish invalid position
+            {
+                robot.pose.position.x = invalid_pos_x;
+                robot.pose.position.y = invalid_pos_y;
+                robot.pose.position.z = invalid_pos_z;
+            }
+            p1.publish(robot);
             
             if (image_view)
             {
@@ -146,6 +144,11 @@ int main(int argc, char **argv)
                 if (key == 27)
                 {
                     break;
+                }
+                
+                if (true)
+                {
+                    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
                 }
             }
         }
