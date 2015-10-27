@@ -5,8 +5,10 @@
 #include <stdint.h>
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <sensor_msgs/Image.h>
 #include "include/robotTracking.h"
 using namespace std;
 using namespace cv;
@@ -43,7 +45,7 @@ void init_rotation(void)
 {
     Rc2b = Eigen::AngleAxisd(-0.5 * M_PI, Vector3d::UnitZ()) * Eigen::AngleAxisd(M_PI, Vector3d::UnitX());
     Ri2w = Rc2b;
-    cam_off_b << 0.1, 0., -0.1;
+    cam_off_b << -0.08, 0.07, -0.10;
 }
 Vector3d get_robot_position(Vector3d position)
 {
@@ -68,36 +70,82 @@ int main(int argc, char **argv)
     ros::Subscriber s1 = n.subscribe("odom", 100, odom_callback);
     ros::Publisher  p1 = n.advertise<geometry_msgs::PoseStamped>("robot", 100);
     cout << "read camera info" << endl;
-    char cm[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/camera.yml";
-    char red[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/color_red_bluefox.yml";
-    char green[] = "/home/ksu/Data/ros_ws/catkin_ws/src/robotTracking/config/color_green_bluefox.yml";
-    init_rotation();
+    char cm[1024];
+    char red[1024];
+    char green[1024];
+    string ccm, rred, ggreen;
+    bool image_view = false;
+    n.getParam("cam_cal_file", ccm);
+    n.getParam("red_thr_file", rred);
+    n.getParam("green_thr_file", ggreen);
+    n.getParam("show_image", image_view);
+    cout << "cam_cal: " << ccm << endl;
+    cout << "red_thr: " << rred << endl;
+    cout << "green_thr: " << ggreen << endl;
+    cout << "image_show: " << image_view << endl;
+    std::strcpy(cm, ccm.c_str());
+    std::strcpy(red, rred.c_str());
+    std::strcpy(green, ggreen.c_str());
     int ret = robotTrackInit(cm, red, green);
-    cout << "end" << endl;
     if (ret != 0)
         cout << "fail to read file" << endl;
+
+    double invalid_pos_x, invalid_pos_y, invalid_pos_z;
+    n.param("invalid_pos_x", invalid_pos_x, -1.0);
+    n.param("invalid_pos_y", invalid_pos_y, -1.0);
+    n.param("invalid_pos_z", invalid_pos_z, -1.0);
+    
+
+    if (image_view)
+    {
+        image_transport::ImageTransport it(n);
+        image_transport::Publisher vis_pub = it.advertise("vis_img", 1);
+    }
+    
+
+    init_rotation();
     ros::Rate loop(60);
-    std::vector<Eigen::Vector3d> robotPosition;//normalized position
+    std::vector<Eigen::VectorXd> robotPosition;//normalized position
     while (n.ok())
     {
         if (image_ready)
         {
-            ros::Time t1 = ros::Time::now();
             image_ready = false;
             robotPosition = robotTrack(image);
-            for (uint32_t i = 0; i < robotPosition.size(); i++)
+            
+            geometry_msgs::PoseStamped  robot;
+            robot.header.stamp = tImage;
+            robot.header.frame_id = "world";
+            
+            if (robotPosition.size() >= 1)
             {
-                cout << "robot " << i << endl;
-                cout << "robot normalized: " << robotPosition[i].transpose() << endl;
-                cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
+                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0,3));
+                robot.pose.position.x = rob_pos.x();
+                robot.pose.position.y = rob_pos.y();
+                robot.pose.position.z = rob_pos.z();
+                cout << robotPosition[0].transpose() << endl;
             }
-            imshow("frame", image);
-            ros::Time t2 = ros::Time::now();
-            cout << "time consumption: " << (t2-t1).toSec() << " \t hz: " << 1 / (t2-t1).toSec() << endl;
-            char key = waitKey(30);
-            if (key == 27)
+            else // publish invalid position
             {
-                break;
+                robot.pose.position.x = invalid_pos_x;
+                robot.pose.position.y = invalid_pos_y;
+                robot.pose.position.z = invalid_pos_z;
+            }
+            p1.publish(robot);
+            
+            if (image_view)
+            {
+                imshow("frame", image);
+                char key = waitKey(30);
+                if (key == 27)
+                {
+                    break;
+                }
+                
+                if (true)
+                {
+                    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
+                }
             }
         }
         loop.sleep();
