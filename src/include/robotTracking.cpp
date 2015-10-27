@@ -628,24 +628,42 @@ std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours)
 	Point2f center;
 	float radius = 0.0;
 	std::vector<Eigen::VectorXd> normlizedCenter(contours.size());
+	cv::Mat src = Mat::zeros(1, 2, CV_32FC2);
 	cv::Mat m = Mat::zeros(3, 1, CV_64FC1);
+	std::vector<Point2f> p2;
+	
 	
 	for(int i = 0; i < contours.size(); i++)
 	{
-		 minEnclosingCircle( contours[i], center, radius);
-		 m.at<double>(0) = center.x;
-		 m.at<double>(1) = center.y;
-		 m.at<double>(2) = 1.0;
-		 //cout << "m: " << m << endl;
-		 m = K.inv()*m;
+		 Eigen::VectorXd cc(6);
 		 
-		 Eigen::VectorXd cc(5);
+		 minEnclosingCircle( contours[i], center, radius);
+		 src.at<cv::Vec2f>(0, 0)[0] = center.x;
+		 src.at<cv::Vec2f>(0, 0)[1] = center.y;
+		 
+		 src.at<cv::Vec2f>(0, 1)[0] = (contours[i][1].x + contours[i][0].x)/2.0;
+		 src.at<cv::Vec2f>(0, 1)[1] = (contours[i][1].y + contours[i][0].y)/2.0;
+		 undistortPoints(src, src, K, distCoeff);
+		 
+		 m.at<double>(0) = src.at<cv::Vec2f>(0, 0)[0];
+		 m.at<double>(1) = src.at<cv::Vec2f>(0, 0)[1];
+		 m.at<double>(2) = 1.0;
+		 m = K.inv()*m;
 		 cc(0) = m.at<double>(0);
 		 cc(1) = m.at<double>(1);
 		 cc(2) = m.at<double>(2);
-		 cc(3) = contours[i][1].x - contours[i][0].x;
-		 cc(4) = contours[i][1].y - contours[i][0].y;
-		 normlizedCenter[i] = cc;
+		 
+		 //direction:
+		 m.at<double>(0) = src.at<cv::Vec2f>(0, 1)[0];
+		 m.at<double>(1) = src.at<cv::Vec2f>(0, 1)[1];
+		 m.at<double>(2) = 1.0;
+		 m = K.inv()*m;
+		
+		 cc(0) = m.at<double>(0);
+		 cc(1) = m.at<double>(1);
+		 cc(2) = m.at<double>(2);
+		 
+	 	normlizedCenter[i] = cc;
 	}
 	return normlizedCenter;
 }
