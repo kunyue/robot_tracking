@@ -659,9 +659,9 @@ std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours)
 		 m.at<double>(2) = 1.0;
 		 m = K.inv()*m;
 		
-		 cc(0) = m.at<double>(0);
-		 cc(1) = m.at<double>(1);
-		 cc(2) = m.at<double>(2);
+		 cc(3) = m.at<double>(0);
+		 cc(4) = m.at<double>(1);
+		 cc(5) = m.at<double>(2);
 		 
 	 	normlizedCenter[i] = cc;
 	}
