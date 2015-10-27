@@ -25,6 +25,8 @@ using namespace cv;
 #define EFF_AREA_MAX_THRESHOLD 30000.0
 #define OUTLIER_THRESHOLD 1000.0
 
+#define EFF_ROBOT_THRESHOLD 5
+#define OBSERVE_HISTORY_LEN 5 //observe_history_len
 
 
 const Scalar RED = Scalar(0,0,255);
@@ -40,7 +42,7 @@ const Scalar ColorTable[COLOR_CNT] = {RED, PINK, BLUE, LIGHTBLUE, GREEN, WHITE};
 vector<Point> alignShape(vector<Point>& contour);
 vector< vector<Point> > findPattern(Mat& bwImg);
 vector<cv::Point2d> getTemplate();
-std::vector<Eigen::Vector3d> robotCenter(vector< vector<Point> > contours);
+std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours);
 
 cv::Mat K, distCoeff;
 int image_width, image_height;
@@ -404,7 +406,7 @@ void update_robot_list( vector<RobotFeature>& all_robot,
 						vector<std::pair<int, int> >& matches)
 {
 
-	const int observe_history_len = 5;
+	//const int observe_history_len = 5;
 	for(int i = 0; i < matches.size(); i++)
 	{
 		int id1 = matches[i].first;
@@ -426,7 +428,7 @@ void update_robot_list( vector<RobotFeature>& all_robot,
 			observe_cnt[id1].push(observe_cnt[id1].back());
 		}
 		
-		if(observe_cnt[i].size() > observe_history_len)//observe cnt
+		if(observe_cnt[i].size() > OBSERVE_HISTORY_LEN)//observe cnt
 		{
 			observe_cnt[i].pop();
 		}
@@ -435,9 +437,9 @@ void update_robot_list( vector<RobotFeature>& all_robot,
 	
 	for(int i = all_robot.size() - 1; i >= 0; i--)
 	{
-		if(observe_cnt[i].size() >= observe_history_len && (observe_cnt[i].back() - observe_cnt[i].front()) == 0)
+		if(observe_cnt[i].size() >= OBSERVE_HISTORY_LEN && (observe_cnt[i].back() - observe_cnt[i].front()) == 0)
 		{
-			printf("\nremove a robot from the list");
+			//printf("\nremove a robot from the list");
 			all_robot.erase(all_robot.begin() + i);
 			all_contourPoly.erase(all_contourPoly.begin() + i);
 			observe_cnt.erase(observe_cnt.begin() + i);
@@ -484,8 +486,22 @@ int calibInit(char* calib_filename)
     return 0;
 }
 
+vector< vector<Point> > effective_contourPoly(vector< vector<Point> >& all_contourPoly, vector< queue<int> > observe_cnt)
+{
+	vector< vector<Point> > eff_contourPoly;
+	for (unsigned int i = 0; i < all_contourPoly.size(); i++)
+	{
+		if(observe_cnt[i].front() > EFF_ROBOT_THRESHOLD)
+		{
+			eff_contourPoly.push_back(all_contourPoly[i]);
+		}
+	}
+	
+	return eff_contourPoly;
+}
 
-std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
+
+std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
 {
 	
 	int64_t start = get_timestamp();   
@@ -500,10 +516,11 @@ std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
     static vector< vector<Point> > all_contourPoly;
     static vector< queue<int> > observe_cnt;
     
+    vector< vector<Point> > eff_contourPoly;//if a robot is seen for more than n times, it is an effective_tobot
     vector<std::pair<int, int> > matches;
 	char label[3];
 	Mat mask;
-	std::vector<Eigen::Vector3d> robotPosition;
+	std::vector<Eigen::VectorXd> robotPosition;
 	if(frame.empty() ) 
 	{
 		return robotPosition;
@@ -525,12 +542,20 @@ std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
 	
 	update_robot_list(all_robot, all_contourPoly, observe_cnt, robot_features, contourPoly, matches);
 	
-	robotPosition = robotCenter(all_contourPoly);
+	eff_contourPoly = effective_contourPoly(all_contourPoly, observe_cnt);
 	
-	for (unsigned int i = 0; i < contourPoly.size(); i++)
+	//robotPosition = robotCenter(all_contourPoly);
+//	for (unsigned int i = 0; i < contourPoly.size(); i++)
+//	{
+//		Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
+//		drawContours(frame, all_contourPoly, i, color, 2, 8);
+//	}
+	
+	robotPosition = robotCenter(eff_contourPoly);
+	for (unsigned int i = 0; i < eff_contourPoly.size(); i++)
 	{
 		Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-		drawContours(frame, all_contourPoly, i, color, 2, 8);
+		drawContours(frame, eff_contourPoly, i, color, 2, 8);
 	}
 	
 	
@@ -598,11 +623,11 @@ std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
 
 
 //normlized position
-std::vector<Eigen::Vector3d> robotCenter(vector< vector<Point> > contours)
+std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours)
 {
 	Point2f center;
 	float radius = 0.0;
-	std::vector<Eigen::Vector3d> normlizedCenter(contours.size());
+	std::vector<Eigen::VectorXd> normlizedCenter(contours.size());
 	cv::Mat m = Mat::zeros(3, 1, CV_64FC1);
 	
 	for(int i = 0; i < contours.size(); i++)
@@ -614,10 +639,12 @@ std::vector<Eigen::Vector3d> robotCenter(vector< vector<Point> > contours)
 		 //cout << "m: " << m << endl;
 		 m = K.inv()*m;
 		 
-		 Eigen::Vector3d cc;
+		 Eigen::VectorXd cc(5);
 		 cc(0) = m.at<double>(0);
 		 cc(1) = m.at<double>(1);
 		 cc(2) = m.at<double>(2);
+		 cc(3) = contours[i][1].x - contours[i][0].x;
+		 cc(4) = contours[i][1].y - contours[i][0].y;
 		 normlizedCenter[i] = cc;
 	}
 	return normlizedCenter;

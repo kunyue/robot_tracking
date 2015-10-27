@@ -57,7 +57,7 @@ include_directories(
 
 #ball detect
 add_executable(robot_tracking  src/main.cpp src/include/robotTracking.cpp src/include/robotFeature.cpp src/include/lap.cpp src/include/util.cpp)
-target_link_libraries(robot_tracking    ${catkin_LIBRARIES})
+target_link_libraries(robot_tracking    ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
 # add_dependencies(tag_slam_node tag_slam_generate_messages_cpp)

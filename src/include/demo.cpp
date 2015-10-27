@@ -6,7 +6,7 @@
 #include <queue>
 
 #include <opencv2/opencv.hpp>
-#include "/opt/eigen/Eigen/Dense"
+#include "Eigen/Dense"
 #include "robotTracking.h"
 #include "robotFeature.h"
 #include "util.h"
@@ -32,7 +32,7 @@ int main()
 	
 	//1. init
 	int ret = robotTrackInit("../data/camera.yml", "../data/color_red_bluefox.yml", "../data/color_green_bluefox.yml");
-	std::vector<Eigen::Vector3d> robotPosition;//normalized position
+	std::vector<Eigen::VectorXd> robotPosition;//normalized position
 	Mat frame;
     VideoCapture cap("../data/1.avi"); 
     if ( !cap.isOpened()  )  // if not success, exit program
@@ -47,6 +47,7 @@ int main()
 		if(frame.empty()) break;
 		//2. track
 		robotPosition = robotTrack(frame);
+		cout << robotPosition.size() << " robotPos: " << "\n";
 		for (unsigned int i = 0; i < robotPosition.size(); i++)
 		{
 			cout << robotPosition[i].transpose() <<  endl;
