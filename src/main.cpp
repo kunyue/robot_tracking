@@ -8,6 +8,7 @@
 #include <image_transport/image_transport.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <sensor_msgs/Image.h>
 #include "include/robotTracking.h"
 using namespace std;
 using namespace cv;
@@ -104,19 +105,13 @@ int main(int argc, char **argv)
 
     init_rotation();
     ros::Rate loop(60);
-    std::vector<Eigen::Vector3d> robotPosition;//normalized position
+    std::vector<Eigen::VectorXd> robotPosition;//normalized position
     while (n.ok())
     {
         if (image_ready)
         {
             image_ready = false;
             robotPosition = robotTrack(image);
-            //for (uint32_t i = 0; i < robotPosition.size(); i++)
-            //{
-            //    cout << "robot " << i << endl;
-            //    cout << "robot normalized: " << robotPosition[i].transpose() << endl;
-            //    cout << "robot position: " << get_robot_position(robotPosition[i]).transpose() << endl;
-            //}
             
             geometry_msgs::PoseStamped  robot;
             robot.header.stamp = tImage;
@@ -124,10 +119,11 @@ int main(int argc, char **argv)
             
             if (robotPosition.size() >= 1)
             {
-                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0]);
+                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0,3));
                 robot.pose.position.x = rob_pos.x();
                 robot.pose.position.y = rob_pos.y();
                 robot.pose.position.z = rob_pos.z();
+                cout << robotPosition[0].transpose() << endl;
             }
             else // publish invalid position
             {
