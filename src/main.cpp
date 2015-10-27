@@ -97,10 +97,12 @@ int main(int argc, char **argv)
     n.param("invalid_pos_z", invalid_pos_z, -1.0);
 
 
+    image_transport::ImageTransport it(n);
+    image_transport::Publisher vis_pub;
+    
     if (image_view)
     {
-        image_transport::ImageTransport it(n);
-        image_transport::Publisher vis_pub = it.advertise("vis_img", 1);
+        vis_pub = it.advertise("vis_img", 1);
     }
 
 
@@ -150,16 +152,19 @@ int main(int argc, char **argv)
 
             if (image_view)
             {
-                imshow("frame", image);
-                char key = waitKey(30);
-                if (key == 27)
+                if (false)
                 {
-                    break;
+                    imshow("frame", image);
+                    char key = waitKey(30);
+                    if (key == 27)
+                    {
+                        break;
+                    }
                 }
-
                 if (true)
                 {
                     sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
+                    vis_pub.publish(msg);
                 }
             }
         }

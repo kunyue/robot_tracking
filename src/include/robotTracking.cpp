@@ -19,14 +19,14 @@ using namespace cv;
 //using cv::ml::SVM;
 
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
-#define EDGE_BASED 1//1 edge based; color based method 
+#define EDGE_BASED 0//1 edge based; color based method 
 
 #define EFF_AREA_MIN_THRESHOLD 100.0
 #define EFF_AREA_MAX_THRESHOLD 30000.0
 #define OUTLIER_THRESHOLD 1000.0
 
-#define EFF_ROBOT_THRESHOLD 5
-#define OBSERVE_HISTORY_LEN 5 //observe_history_len
+#define EFF_ROBOT_THRESHOLD 3
+#define OBSERVE_HISTORY_LEN 10 //observe_history_len
 
 
 const Scalar RED = Scalar(0,0,255);
