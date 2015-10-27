@@ -46,6 +46,7 @@ void init_rotation(void)
     Rc2b = Eigen::AngleAxisd(-0.5 * M_PI, Vector3d::UnitZ()) * Eigen::AngleAxisd(M_PI, Vector3d::UnitX());
     Ri2w = Rc2b;
     cam_off_b << -0.08, 0.07, -0.10;
+    cout << "Rc2b "<< endl << Rc2b << endl;
 }
 Vector3d get_robot_position(Vector3d position)
 {
@@ -54,7 +55,7 @@ Vector3d get_robot_position(Vector3d position)
     Rc2i = Ri2w.inverse() * Rc2w;
     //pos_i is normlized coordinate; the POS_I is the real coordinate; both are in intermidiate frame
     Vector3d pos_i, POS_I, POS_W, CAM_W;
-    pos_i = Rc2i * position;
+    pos_i = Rc2i * position.normalized();
     pos_i = pos_i / pos_i.z();
     POS_I = pos_body.z() * pos_i;
     CAM_W = pos_body + Rb2w * cam_off_b;
@@ -94,14 +95,14 @@ int main(int argc, char **argv)
     n.param("invalid_pos_x", invalid_pos_x, -1.0);
     n.param("invalid_pos_y", invalid_pos_y, -1.0);
     n.param("invalid_pos_z", invalid_pos_z, -1.0);
-    
+
 
     if (image_view)
     {
         image_transport::ImageTransport it(n);
         image_transport::Publisher vis_pub = it.advertise("vis_img", 1);
     }
-    
+
 
     init_rotation();
     ros::Rate loop(60);
@@ -112,27 +113,41 @@ int main(int argc, char **argv)
         {
             image_ready = false;
             robotPosition = robotTrack(image);
-            
+
             geometry_msgs::PoseStamped  robot;
             robot.header.stamp = tImage;
             robot.header.frame_id = "world";
-            
+
             if (robotPosition.size() >= 1)
             {
-                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0,3));
+                Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0, 3));
                 robot.pose.position.x = rob_pos.x();
                 robot.pose.position.y = rob_pos.y();
                 robot.pose.position.z = rob_pos.z();
-                cout << robotPosition[0].transpose() << endl;
+                Eigen::Vector3d head_pos = get_robot_position(robotPosition[0].segment(3, 3));
+                Eigen::Vector3d head_ori = head_pos - rob_pos;
+                double head_angle = atan2(head_ori.y(), head_ori.x());
+                Eigen::Quaterniond robot_ori;
+                robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
+                robot.pose.orientation.x = robot_ori.x();
+                robot.pose.orientation.y = robot_ori.y();
+                robot.pose.orientation.z = robot_ori.z();
+                robot.pose.orientation.w = robot_ori.w();
+                cout << "sd: " << robotPosition[0].transpose() << endl; 
+                cout << "robot pose: "<< rob_pos.x() << " \t " << rob_pos.y() << " \t " << rob_pos.z() << " \tori: " << 180 * head_angle / M_PI << " quad: " << pos_body.x() << " " << pos_body.y() << " " << pos_body.z() << endl;
             }
             else // publish invalid position
             {
                 robot.pose.position.x = invalid_pos_x;
                 robot.pose.position.y = invalid_pos_y;
                 robot.pose.position.z = invalid_pos_z;
+                robot.pose.orientation.x = 0;
+                robot.pose.orientation.y = 0;
+                robot.pose.orientation.z = 0;
+                robot.pose.orientation.w = 1;
             }
             p1.publish(robot);
-            
+
             if (image_view)
             {
                 imshow("frame", image);
@@ -141,7 +156,7 @@ int main(int argc, char **argv)
                 {
                     break;
                 }
-                
+
                 if (true)
                 {
                     sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
