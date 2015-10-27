@@ -14,6 +14,7 @@ using cv::Mat;
 //using cv::ml::SVM;
 //using namespace cv::ml;
 
+
 void robotSegment(Mat& frame, Mat& mask);
 int svmInit(char*  filename1, char* filename2);
 int calibInit(char* calib_filename);
@@ -23,12 +24,13 @@ void free_svm();
 
 vector< vector<Point> > findPattern(Mat& bwImg);;
 
-std::vector<Eigen::Vector3d> robotTrack(cv::Mat& frame);
+std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);
 
 void robotMatch(vector<RobotFeature>& r1, vector<RobotFeature>& r2, vector<std::pair<int, int> >& matches);
 
 std::vector< std::vector<cv::Point> > robotDetect(cv::Mat &frame);
 void calc_features(cv::Mat img, std::vector< std::vector<cv::Point> >& contours, std::vector<RobotFeature>& robot_features);
+vector< vector<Point> > effective_contourPoly(vector< vector<Point> >& all_contourPoly, vector< queue<int> > observe_cnt);
 
 void update_robot_list( vector<RobotFeature>& all_robot, 
 						vector< vector<Point> >& all_contourPoly, 
