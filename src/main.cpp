@@ -104,8 +104,7 @@ int main(int argc, char **argv)
     {
         vis_pub = it.advertise("vis_img", 1);
     }
-
-
+	
     init_rotation();
     ros::Rate loop(60);
     std::vector<Eigen::VectorXd> robotPosition;//normalized position
@@ -114,6 +113,7 @@ int main(int argc, char **argv)
         if (image_ready)
         {
             image_ready = false;
+            
             robotPosition = robotTrack(image);
 
             geometry_msgs::PoseStamped  robot;
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 
             if (image_view)
             {
-                if (false)
+                if (true)
                 {
                     imshow("frame", image);
                     char key = waitKey(30);

@@ -21,11 +21,11 @@ using namespace cv;
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
 #define EDGE_BASED 0//1 edge based; color based method 
 
-#define EFF_AREA_MIN_THRESHOLD 100.0
-#define EFF_AREA_MAX_THRESHOLD 30000.0
+#define EFF_AREA_MIN_THRESHOLD 200.0
+#define EFF_AREA_MAX_THRESHOLD 5000.0
 #define OUTLIER_THRESHOLD 1000.0
 
-#define EFF_ROBOT_THRESHOLD 3
+#define EFF_ROBOT_THRESHOLD 5
 #define OBSERVE_HISTORY_LEN 10 //observe_history_len
 
 
@@ -41,6 +41,7 @@ const Scalar ColorTable[COLOR_CNT] = {RED, PINK, BLUE, LIGHTBLUE, GREEN, WHITE};
 
 vector<Point> alignShape(vector<Point>& contour);
 vector< vector<Point> > findPattern(Mat& bwImg);
+vector< vector<Point> > findBox(Mat& bwImg);
 vector<cv::Point2d> getTemplate();
 std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours);
 
@@ -69,6 +70,57 @@ vector<cv::Point2d> getTemplate()
 	return robotPattern;
 }
 
+vector< vector<Point> > findBox(Mat& bwImg)
+{
+	vector< vector<Point> > contours, contoursPoly;
+	
+	vector<Vec4i>hierarchy;
+	int64_t start = 0, end = 0;
+	
+	//start = get_timestamp();  
+	findContours(bwImg, contours, hierarchy, /*CV_RETR_LIST*/ CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+	//end = get_timestamp();
+	//cout << "find contours: " << (end - start)/1000000.0 << endl;
+	//start = get_timestamp();	
+	//vector<RotatedRect> minRect;
+	for(int i = 0; i < contours.size(); i++)
+	{
+		double area = contourArea(contours[i]);
+		
+		if(area > EFF_AREA_MIN_THRESHOLD && area < EFF_AREA_MAX_THRESHOLD)
+		{
+			
+			
+			RotatedRect rect = minAreaRect( Mat(contours[i]) );
+			//minRect.push_back(rect);
+
+			
+			Point2f vertices[4];
+			rect.points(vertices);
+			double len1 = distance(vertices[0], vertices[1]);
+			double len2 = distance(vertices[1], vertices[2]);
+			double long_axis = max(len1, len2);
+			double short_axis = min(len1, len2);
+			double ratio = long_axis/short_axis;
+			double rectArea = long_axis*short_axis;
+			double area_ratio = area/rectArea;
+			
+			if(ratio < 1.2 || ratio > 3.0 || area_ratio < 0.6)
+			{
+				continue;
+			}
+			//cout << "ratio: " << ratio << " area_ratio: " << area_ratio << endl;
+			vector<Point> contour;
+			for (int j = 0; j < 4; j++)
+			{
+				contour.push_back(vertices[j]);
+			}
+			contoursPoly.push_back(contour);
+		}
+	}
+	return contoursPoly;
+}
+
 
 vector< vector<Point> > findPattern(Mat& bwImg)
 {
@@ -81,8 +133,7 @@ vector< vector<Point> > findPattern(Mat& bwImg)
 	findContours(bwImg, contours, hierarchy, /*CV_RETR_LIST*/ CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 	//end = get_timestamp();
 	//cout << "find contours: " << (end - start)/1000000.0 << endl;
-	
-	start = get_timestamp();	
+	//start = get_timestamp();	
 	for(int i = 0; i < contours.size(); i++)
 	{
 		double area = contourArea(contours[i]);
@@ -104,8 +155,7 @@ vector< vector<Point> > findPattern(Mat& bwImg)
 					contoursPoly.push_back(contour);
 				}
 				
-			}
-			
+			}	
 		}
 	}
 	//end = get_timestamp();
@@ -116,7 +166,7 @@ vector< vector<Point> > findPattern(Mat& bwImg)
 
 vector<Point> alignShape(vector<Point>& contour)
 {
-	assert(contour.size() == 8);
+	//assert(contour.size() == 8);
 	vector<Point> alignedContour(contour.size());
 	vector<float> lengths(contour.size());
 	for(int i = 0; i < contour.size(); i++)
@@ -272,6 +322,7 @@ vector< vector<Point> > robotDetect(cv::Mat &frame/*, cv::Mat& K, cv::Mat& distC
 	
 	//start = get_timestamp();  
 	contourPoly = findPattern(edgeImg);
+	//contourPoly = findBox(edgeImg);
 	//end = get_timestamp();
 	
 	
@@ -474,7 +525,7 @@ int calibInit(char* calib_filename)
     	printf("\ncan not read the calibration result");
     	return -1;
     }
-    
+    cout << "K: " << K << "\ndistCoeff: " << distCoeff << endl; 
     cv::initUndistortRectifyMap(
 		    K,
 		    distCoeff,
@@ -526,15 +577,16 @@ std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
 		return robotPosition;
 	}
 	
+	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	#if EDGE_BASED == 1
-	//remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	contourPoly = robotDetect(frame);	
 	
 	#else 
 	robotSegment(frame, mask);
 	//imshow("mask", mask);
-	//waitKey();
-	contourPoly = findPattern(mask);
+	//waitKey(10);
+	//contourPoly = findPattern(mask);
+	contourPoly = findBox(mask);
 	#endif 
 	calc_features(frame, contourPoly, robot_features);
 	
@@ -545,17 +597,19 @@ std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
 	eff_contourPoly = effective_contourPoly(all_contourPoly, observe_cnt);
 	
 	//robotPosition = robotCenter(all_contourPoly);
-//	for (unsigned int i = 0; i < contourPoly.size(); i++)
-//	{
-//		Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-//		drawContours(frame, all_contourPoly, i, color, 2, 8);
-//	}
+	// for (unsigned int i = 0; i < contourPoly.size(); i++)
+	// {
+	// 	Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
+	// 	drawContours(frame, all_contourPoly, i, color, 2, 8);
+	// }
 	
 	robotPosition = robotCenter(eff_contourPoly);
+	
 	for (unsigned int i = 0; i < eff_contourPoly.size(); i++)
 	{
 		Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
 		drawContours(frame, eff_contourPoly, i, color, 2, 8);
+		circle(frame, eff_contourPoly[i][0], 2.0, color, 2, 8);
 	}
 	
 	
@@ -638,27 +692,19 @@ std::vector<Eigen::VectorXd> robotCenter(vector< vector<Point> > contours)
 		 Eigen::VectorXd cc(6);
 		 
 		 minEnclosingCircle( contours[i], center, radius);
-		 src.at<cv::Vec2f>(0, 0)[0] = center.x;
-		 src.at<cv::Vec2f>(0, 0)[1] = center.y;
-		 
-		 src.at<cv::Vec2f>(0, 1)[0] = (contours[i][1].x + contours[i][0].x)/2.0;
-		 src.at<cv::Vec2f>(0, 1)[1] = (contours[i][1].y + contours[i][0].y)/2.0;
-		 undistortPoints(src, src, K, distCoeff);
-		 
-		 m.at<double>(0) = src.at<cv::Vec2f>(0, 0)[0];
-		 m.at<double>(1) = src.at<cv::Vec2f>(0, 0)[1];
+		 m.at<double>(0) = center.x;
+		 m.at<double>(1) = center.y;
 		 m.at<double>(2) = 1.0;
-		 //m = K.inv()*m;
+		 m = K.inv()*m;
 		 cc(0) = m.at<double>(0);
 		 cc(1) = m.at<double>(1);
 		 cc(2) = m.at<double>(2);
 		 
 		 //direction:
-		 m.at<double>(0) = src.at<cv::Vec2f>(0, 1)[0];
-		 m.at<double>(1) = src.at<cv::Vec2f>(0, 1)[1];
+		 m.at<double>(0) = (contours[i][1].x + contours[i][0].x)/2.0;
+		 m.at<double>(1) = (contours[i][1].y + contours[i][0].y)/2.0;
 		 m.at<double>(2) = 1.0;
-		 //m = K.inv()*m;
-		
+		 m = K.inv()*m;
 		 cc(3) = m.at<double>(0);
 		 cc(4) = m.at<double>(1);
 		 cc(5) = m.at<double>(2);
@@ -768,20 +814,6 @@ void robotSegment(Mat& frame, Mat& mask)
 			mask.at<unsigned char>(i, j) = colorMap[id1][id2][id3];
 		}
 	}
-}
-
-
-void free_svm()
-{
-	for (unsigned int i = 0; i < 256; i += table_scale)
-	{
-		for (unsigned int j = 0; j < 256; j += table_scale)
-		{
-			free(colorMap[i/table_scale][j/table_scale]);
-		}
-		free(colorMap[i/table_scale]);
-	}
-	free(colorMap);
 }
 
 

@@ -20,8 +20,6 @@ int svmInit(char*  filename1, char* filename2);
 int calibInit(char* calib_filename);
 int robotTrackInit(char* calib_filename, char*  green_svm_filename, char* red_svm_filename) ;
 
-void free_svm();
-
 vector< vector<Point> > findPattern(Mat& bwImg);;
 
 std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);

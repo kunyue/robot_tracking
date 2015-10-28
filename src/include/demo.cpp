@@ -25,32 +25,39 @@ const Scalar WHITE = Scalar(255, 255, 255);
 const int COLOR_CNT = 6;
 const Scalar ColorTable[COLOR_CNT] = {RED, PINK, BLUE, LIGHTBLUE, GREEN, WHITE};
 
+int demo_edge_based(int argc, char** argv);
 
-
-int main() 
+int main(int argc, char** argv) 
 {
 	
+	//demo_edge_based(argc, argv);
+	//return 0;
+
 	//1. init
-	int ret = robotTrackInit("../data/camera.yml", "../data/color_red_bluefox.yml", "../data/color_green_bluefox.yml");
+	int ret = robotTrackInit("../../../config/camera_binning.yml", "../../../config/color_red_bluefox.yml", "../../../config/color_green_bluefox.yml");
 	std::vector<Eigen::VectorXd> robotPosition;//normalized position
 	Mat frame;
-    VideoCapture cap("../data/1.avi"); 
+    //VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
+    VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
+   
     if ( !cap.isOpened()  )  // if not success, exit program
     {
          cout << "Cannot open the camera or the video file " << endl;
          return -1;
     }
-    
+    int cnt = 0;
     while(1)
     {
 		cap >> frame;
 		if(frame.empty()) break;
+		cnt++;
+		if(cnt < 200) continue;
 		//2. track
 		robotPosition = robotTrack(frame);
-		cout << robotPosition.size() << " robotPos: " << "\n";
+		//cout << robotPosition.size() << " robotPos: " << "\n";
 		for (unsigned int i = 0; i < robotPosition.size(); i++)
 		{
-			cout << robotPosition[i].transpose() <<  endl;
+			//cout << robotPosition[i].transpose() <<  endl;
 		}
 		
 		imshow("frame", frame);
@@ -58,7 +65,11 @@ int main()
 		if(key == 27)
 		{
 			break;
+		}else if(key == ' ')
+		{
+			waitKey(0);
 		}
+		
 	}
 	
 }
