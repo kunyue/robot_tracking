@@ -27,7 +27,14 @@ std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);
 void robotMatch(vector<RobotFeature>& r1, vector<RobotFeature>& r2, vector<std::pair<int, int> >& matches);
 
 std::vector< std::vector<cv::Point> > robotDetect(cv::Mat &frame);
-void calc_features(cv::Mat img, std::vector< std::vector<cv::Point> >& contours, std::vector<RobotFeature>& robot_features);
+//void calc_features(cv::Mat img, std::vector< std::vector<cv::Point> >& contours, std::vector<RobotFeature>& robot_features);
+void calc_features(cv::Mat img, 
+	vector< vector<Point> >& contours, 
+	std::vector<Point2f>& shape_centers, 
+	std::vector<Point2f>& mass_centers, 
+	std::vector<Point2f>& dir_centers,
+	vector<RobotFeature>& robot_features);
+
 vector< vector<Point> > effective_contourPoly(vector< vector<Point> >& all_contourPoly, vector< queue<int> > observe_cnt);
 
 void update_robot_list( vector<RobotFeature>& all_robot, 

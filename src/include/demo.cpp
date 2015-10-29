@@ -74,6 +74,7 @@ int main(int argc, char** argv)
 	
 }
 
+/*
 
 int demo_edge_based(int argc, char** argv)
 {
@@ -325,3 +326,4 @@ int demo_color_based()
     
 }
 
+*/

@@ -17,3 +17,18 @@ int readCalibrationResult(char* filename, cv::Mat& K, cv::Mat& distCoeff, int& i
 }
 
 
+
+double normalize_angle_radian(double ang)
+{
+	while(ang > M_PI)
+	{
+		ang -= 2*M_PI;
+	}
+	while(ang < -M_PI)
+	{
+		ang += 2*M_PI;
+	}
+	return ang;
+}
+
+

@@ -27,6 +27,13 @@ double distance(TYPE p1, TYPE p2)
 	return dist;
 }
 
+template<class TYPE>
+double cross_product(TYPE p1, TYPE p2)
+{
+	return p1.x*p2.x + p1.y*p2.y;
+}
+
+double normalize_angle_radian(double ang);
 
 
 static inline uint64_t get_timestamp()
