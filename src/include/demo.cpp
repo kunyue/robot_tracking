@@ -54,10 +54,10 @@ int main(int argc, char** argv)
 		if(cnt < 200) continue;
 		//2. track
 		robotPosition = robotTrack(frame);
-		//cout << robotPosition.size() << " robotPos: " << "\n";
+		cout << robotPosition.size() << " robotPos: " << "\n";
 		for (unsigned int i = 0; i < robotPosition.size(); i++)
 		{
-			//cout << robotPosition[i].transpose() <<  endl;
+			cout << robotPosition[i].transpose() <<  endl;
 		}
 		
 		imshow("frame", frame);
