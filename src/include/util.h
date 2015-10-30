@@ -11,7 +11,10 @@ int readCalibrationResult(char* filename, cv::Mat& K, cv::Mat& distCoeff, int& i
 double normalize_angle(double angle);
 void drawrect(Mat& img, RotatedRect rect, Scalar color);
 
-void rect_to_contour(RotatedRect rect, std::vector<Point2f>& contour);
+void rect_to_contour(RotatedRect rect, std::vector<Point>& contour);
+//Rect maxRect(RotatedRect rect);
+
+RotatedRect resize_rect(RotatedRect rect, double scale);
 
 template<class TYPE>
 double angle(TYPE p1, TYPE p2)

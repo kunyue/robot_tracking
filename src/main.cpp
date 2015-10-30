@@ -9,6 +9,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/Image.h>
+#include <deque>
 #include "include/robotTracking.h"
 using namespace std;
 using namespace cv;
@@ -17,25 +18,33 @@ using namespace Eigen;
 ros::Time tImage;
 cv::Mat image, frame, dst;
 bool image_ready = false;
+deque<pair<double,cv::Mat> > image_q;
 void image_callback(const sensor_msgs::Image::ConstPtr &msg)
 {
     image_ready = true;
     tImage = msg->header.stamp;
     image  = cv_bridge::toCvCopy(msg, string("bgr8"))->image;
+    image_q.push_back(make_pair(msg->header.stamp.toSec(), image));
 }
 
 //odometry related messages
-Vector3d  pos_body;
+map<double, pair<Vector3d, Quaterniond> > odom_set;
+vector<pair<double, Vector3d> > robot_p_q;
+Vector3d pos_body;
 Quaterniond att_body;
 void odom_callback(const nav_msgs::Odometry::ConstPtr &msg)
 {
-    pos_body.x() = msg->pose.pose.position.x;
-    pos_body.y() = msg->pose.pose.position.y;
-    pos_body.z() = msg->pose.pose.position.z;
-    att_body.w() = msg->pose.pose.orientation.w;
-    att_body.x() = msg->pose.pose.orientation.x;
-    att_body.y() = msg->pose.pose.orientation.y;
-    att_body.z() = msg->pose.pose.orientation.z;
+    pos_body = Vector3d(msg->pose.pose.position.x,
+        msg->pose.pose.position.y,
+        msg->pose.pose.position.z);
+
+    att_body = Quaterniond(
+    msg->pose.pose.orientation.w,
+    msg->pose.pose.orientation.x,
+    msg->pose.pose.orientation.y,
+    msg->pose.pose.orientation.z);
+
+    odom_set[msg->header.stamp.toSec()] = make_pair(pos_body, att_body);
 }
 
 // b -> body  c -> camera  w -> world i -> intermidiate (initial camera attitude)
@@ -106,19 +115,51 @@ int main(int argc, char **argv)
     }
 	
     init_rotation();
-    ros::Rate loop(60);
-    std::vector<Eigen::VectorXd> robotPosition;//normalized position
+    ros::Rate loop(600);
+   ;//normalized position
     while (n.ok())
     {
         if (image_ready)
         {
             image_ready = false;
             
-            robotPosition = robotTrack(image);
+            if (odom_set.size() == 0)
+                continue;
+
+            if (image_q[0].first <= odom_set.begin()->first)
+            {
+                image_q.pop_front();
+                puts("give up");
+                continue;
+            }
+
+            if (image_q[0].first > odom_set.rbegin()->first)
+            {
+                puts("wait for odom");
+                continue;
+            }
+
+            map<double, pair<Vector3d, Quaterniond> >::iterator it = odom_set.lower_bound(image_q[0].first);
+            if (it == odom_set.end())
+            {
+                printf("no found in map %f %f\n", image_q[0].first, odom_set.rbegin()->first);
+                continue;
+            }
+
+            printf("detection %f %f\n", image_q[0].first, it->first);
 
             geometry_msgs::PoseStamped  robot;
-            robot.header.stamp = tImage;
+            robot.header.stamp = ros::Time(image_q[0].first);
+            image = image_q[0].second;
+            image_q.pop_front();
             robot.header.frame_id = "world";
+            std::vector<Eigen::VectorXd> robotPosition = camshiftTrack(image);
+
+            puts("set pose");
+            pos_body = it->second.first;
+            att_body = it->second.second;
+
+            bool succ = false;
 
             if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
@@ -126,20 +167,38 @@ int main(int argc, char **argv)
                 robot.pose.position.x = rob_pos.x();
                 robot.pose.position.y = rob_pos.y();
                 robot.pose.position.z = rob_pos.z();
-                Eigen::Vector3d head_pos = get_robot_position(robotPosition[0].segment(3, 3));
-                Eigen::Vector3d head_ori = head_pos - rob_pos;
-                double head_angle = atan2(head_ori.y(), head_ori.x());
-                Eigen::Quaterniond robot_ori;
-                robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
-                robot.pose.orientation.x = robot_ori.x();
-                robot.pose.orientation.y = robot_ori.y();
-                robot.pose.orientation.z = robot_ori.z();
-                robot.pose.orientation.w = robot_ori.w();
-                cout << "sd: " << robotPosition[0].transpose() << endl; 
-                cout << "robot pose: "<< rob_pos.x() << " \t " << rob_pos.y() << " \t " << rob_pos.z() << " \tori: " << 180 * head_angle / M_PI << " quad: " << pos_body.x() << " " << pos_body.y() << " " << pos_body.z() << endl;
+                
+
+                robot_p_q.push_back(make_pair(tImage.toSec(), rob_pos));
+
+                //cout << "sd: " << robotPosition[0].transpose() << endl; 
+                cout << "robot pose: "<< rob_pos.x() << " \t " << rob_pos.y() << " \t " << rob_pos.z() << endl;
+
+                if(robot_p_q.size() >= 20)
+                {
+                    double dt = tImage.toSec() - robot_p_q[robot_p_q.size() - 20].first;
+                    Vector3d dp = rob_pos - robot_p_q[robot_p_q.size() - 20].second;
+
+                    Eigen::Vector3d head_ori = dp / dt;
+                    double head_angle = atan2(head_ori.y(), head_ori.x());
+
+                    cout << "robot speed: " << head_ori.transpose().norm() << endl;
+                    cout << "ori: " << 180 * head_angle / M_PI << endl;
+
+                    if (fabs(head_ori.norm() - 0.25) < 0.05)// TODO
+                    {
+                        Eigen::Quaterniond robot_ori;
+                        robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
+                        robot.pose.orientation.x = robot_ori.x();
+                        robot.pose.orientation.y = robot_ori.y();
+                        robot.pose.orientation.z = robot_ori.z();
+                        robot.pose.orientation.w = robot_ori.w();
+                        succ = true;
+                    }
+                }
             }
-            else // publish invalid position
-            {
+            // publish invalid position
+            if (!succ) {
                 robot.pose.position.x = invalid_pos_x;
                 robot.pose.position.y = invalid_pos_y;
                 robot.pose.position.z = invalid_pos_z;

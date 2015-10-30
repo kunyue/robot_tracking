@@ -47,7 +47,7 @@ void drawrect(Mat& img, RotatedRect rect, Scalar color)
 	}
 }
 
-void rect_to_contour(RotatedRect rect, std::vector<Point2f>& contour)
+void rect_to_contour(RotatedRect rect, std::vector<Point>& contour)
 {
 	if(contour.size() != 4)
 	{
@@ -62,7 +62,27 @@ void rect_to_contour(RotatedRect rect, std::vector<Point2f>& contour)
 		contour[i] = vertices[i];
 	}
 	
-	cout << "##contour: " << contour << endl;
+	//cout << "##contour: " << contour << endl;
 }
 
 
+
+//max rect in a rotated rect
+// Rect maxRect(RotatedRect rect)
+// {
+	
+// 	Point center = rect.center();
+// 	Size size = rect.size();
+
+// 	return Rect(center, size/2);
+// }
+
+
+RotatedRect resize_rect(RotatedRect rect, double scale)
+{
+	double width = rect.size.width*scale;
+	double height = rect.size.height;
+
+	RotatedRect r(rect.center, Size2f(width, height), rect.angle);	
+	return r;
+}

@@ -27,6 +27,13 @@ vector< vector<Point> > findPattern(Mat& bwImg);;
 std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);
 std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame);
 
+void robot_center(std::vector< std::vector<Point> > contours, 
+				Mat& color_mask, 
+				vector<Point2f>& mass_centers, 
+				vector<Point2f>& shape_centers
+				//vector<Point2f>& dir_centers,
+				);
+
 void robotMatch(vector<RobotFeature>& r1, vector<RobotFeature>& r2, vector<std::pair<int, int> >& matches);
 
 std::vector< std::vector<cv::Point> > robotDetect(cv::Mat &frame);
@@ -114,63 +121,11 @@ double shapeMatchScore(vector<TYPE>& v1, vector<cv::Point2d> v2)
 
 
 
-//estimate direction of the robot
-//use the mass center 
-template<class T>
-vector<Point2f> mass_center(std::vector< std::vector<T> > contours, Mat& color_mask)
-{
-	cv::Mat mask = cv::Mat::zeros(color_mask.rows, color_mask.cols, CV_8UC1);
-	vector<Point> contour;
-	std::vector<Point2f> robotCenter;
-	
-	for(int i = 0; i < contours.size(); i++)
-	{
-		mask.setTo(Scalar(0));
-		cout << __FILE__ << " " << __LINE__ << endl;
-		drawContours(mask, contours, i, Scalar(1), CV_FILLED);	
-		cout << __FILE__ << " " << __LINE__ << endl;
-		mask &= color_mask;
 
-		float sum_x = 0.0f;
-		float sum_y = 0.0f;
-
-		int count = 0;
-		unsigned int r = 0, g = 0, b = 0;
-		for (unsigned int j = 0; j < mask.rows; j++)
-		{
-			for (unsigned int k = 0; k < mask.cols; k++)
-			{
-				if(mask.at<unsigned char>(j, k))
-				{
-					sum_x += k;
-					sum_y += j;
-					count++;
-				}				
-			}
-		}	
-		Point2f center = Point2f(sum_x/count, sum_y/count);		
-		robotCenter.push_back(center);
-	}
-	return robotCenter;
-}
-
-template<class T>
-vector<Point2f> shape_center(std::vector< std::vector<T> >& contours)
-{
-	Point2f center;
-	float radius = 0.0;
-	std::vector<Point2f> centers;
-	for(int i = 0; i < contours.size(); i++)
-	{
-		 minEnclosingCircle( contours[i], center, radius);
-		 centers.push_back(center);
-	}
-	return centers;
-}
 
 //use the shape center and the mass center to estimate robot direction
 template<class T>
-std::vector<Point2f> robot_direction(std::vector< std::vector<T> > contours, vector<T>&mass_centers, vector<T>& shape_centers)
+std::vector<Point2f> robot_direction(std::vector< std::vector<Point> > contours, vector<T>&mass_centers, vector<T>& shape_centers)
 {
 	std::vector<Point2f> robot_directions;
 	Point2f p0, p1, p2;
