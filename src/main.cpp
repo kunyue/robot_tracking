@@ -116,7 +116,7 @@ int main(int argc, char **argv)
 	
     init_rotation();
     ros::Rate loop(600);
-   ;//normalized position
+    //normalized position
     while (n.ok())
     {
         if (image_ready)
@@ -163,6 +163,7 @@ int main(int argc, char **argv)
 
 
             bool succ = false;
+            const int buffer_size = 10;
 
             if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
@@ -177,10 +178,10 @@ int main(int argc, char **argv)
                 //cout << "sd: " << robotPosition[0].transpose() << endl; 
                 cout << "robot pose: "<< rob_pos.x() << " \t " << rob_pos.y() << " \t " << rob_pos.z() << endl;
 
-                if(robot_p_q.size() >= 20)
+                if(robot_p_q.size() >= buffer_size)
                 {
-                    double dt = tImage.toSec() - robot_p_q[robot_p_q.size() - 20].first;
-                    Vector3d dp = rob_pos - robot_p_q[robot_p_q.size() - 20].second;
+                    double dt = tImage.toSec() - robot_p_q[robot_p_q.size() - buffer_size].first;
+                    Vector3d dp = rob_pos - robot_p_q[robot_p_q.size() - buffer_size].second;
 
                     Eigen::Vector3d head_ori = dp / dt;
                     double head_angle = atan2(head_ori.y(), head_ori.x());
@@ -188,7 +189,7 @@ int main(int argc, char **argv)
                     cout << "robot speed: " << head_ori.transpose().norm() << endl;
                     cout << "ori: " << 180 * head_angle / M_PI << endl;
 
-                    if (fabs(head_ori.norm() - 0.25) < 0.05)// TODO
+                    if (head_ori.norm() > 0.15)// TODO
                     {
                         Eigen::Quaterniond robot_ori;
                         robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
