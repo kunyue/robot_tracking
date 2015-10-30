@@ -11,6 +11,8 @@ using std::vector;
 using std::queue;
 using cv::Point;
 using cv::Mat;
+using std::cout;
+using std::endl;
 //using cv::ml::SVM;
 //using namespace cv::ml;
 
@@ -45,6 +47,10 @@ void update_robot_list( vector<RobotFeature>& all_robot,
 						vector< vector<Point> >& current_contourPoly, 
 						vector<std::pair<int, int> >& matches);
 						
+std::vector<Eigen::VectorXd> normalized_robot_pose(
+	std::vector<Point2f> shape_centers, 
+	std::vector<Point2f> dir_centers);
+
 
 //std::vector< std::vector<cv::Point> > robotDetect(cv::Mat &frame, cv::Mat& K, cv::Mat& distCoeff);
 
@@ -107,6 +113,97 @@ double shapeMatchScore(vector<TYPE>& v1, vector<cv::Point2d> v2)
 }
 
 
+
+//estimate direction of the robot
+//use the mass center 
+template<class T>
+vector<Point2f> mass_center(std::vector< std::vector<T> > contours, Mat& color_mask)
+{
+	cv::Mat mask = cv::Mat::zeros(color_mask.rows, color_mask.cols, CV_8UC1);
+	vector<Point> contour;
+	std::vector<Point2f> robotCenter;
+	
+	for(int i = 0; i < contours.size(); i++)
+	{
+		mask.setTo(Scalar(0));
+		cout << __FILE__ << " " << __LINE__ << endl;
+		drawContours(mask, contours, i, Scalar(1), CV_FILLED);	
+		cout << __FILE__ << " " << __LINE__ << endl;
+		mask &= color_mask;
+
+		float sum_x = 0.0f;
+		float sum_y = 0.0f;
+
+		int count = 0;
+		unsigned int r = 0, g = 0, b = 0;
+		for (unsigned int j = 0; j < mask.rows; j++)
+		{
+			for (unsigned int k = 0; k < mask.cols; k++)
+			{
+				if(mask.at<unsigned char>(j, k))
+				{
+					sum_x += k;
+					sum_y += j;
+					count++;
+				}				
+			}
+		}	
+		Point2f center = Point2f(sum_x/count, sum_y/count);		
+		robotCenter.push_back(center);
+	}
+	return robotCenter;
+}
+
+template<class T>
+vector<Point2f> shape_center(std::vector< std::vector<T> >& contours)
+{
+	Point2f center;
+	float radius = 0.0;
+	std::vector<Point2f> centers;
+	for(int i = 0; i < contours.size(); i++)
+	{
+		 minEnclosingCircle( contours[i], center, radius);
+		 centers.push_back(center);
+	}
+	return centers;
+}
+
+//use the shape center and the mass center to estimate robot direction
+template<class T>
+std::vector<Point2f> robot_direction(std::vector< std::vector<T> > contours, vector<T>&mass_centers, vector<T>& shape_centers)
+{
+	std::vector<Point2f> robot_directions;
+	Point2f p0, p1, p2;
+	for (int i = 0; i < contours.size(); ++i)
+	{
+		p1.x = (contours[i][0].x + contours[i][1].x)/2.0f - shape_centers[i].x;
+		p1.y = (contours[i][0].y + contours[i][1].y)/2.0f - shape_centers[i].y;
+		p2.x = (contours[i][2].x + contours[i][3].x)/2.0f - shape_centers[i].x;
+		p2.y = (contours[i][2].y + contours[i][3].y)/2.0f - shape_centers[i].y;
+		p0.x = mass_centers[i].x - shape_centers[i].x;
+		p0.y = mass_centers[i].y - shape_centers[i].y;
+
+
+		//Point2f p1 = contours[i][0]/2.0 + contours[i][1]/2.0;//(contours[i][0] + contours[i][1])/2.0 - shape_centers[i];
+		// Point2f p2 = (contours[i][2] + contours[i][3])/2 - shape_centers[i];
+		//Point2f p0 = mass_centers[i] - shape_centers[i];
+
+		if(p0.x == 0.0 && p0.y == 0.0)
+		{
+			robot_directions.push_back( Point2f( (contours[i][0].x + contours[i][1].x)/2.0f, (contours[i][0].y + contours[i][1].y)/2.0f) );
+		}else if(cross_product(p0, p1) > 0.0 && cross_product(p0, p2) < 0.0)
+		{
+			robot_directions.push_back( Point2f ( (contours[i][0].x + contours[i][1].x)/2.0f, (contours[i][0].y + contours[i][1].y)/2.0f) );
+		}else if(cross_product(p0, p1) < 0.0 && cross_product(p0, p2) > 0.0)
+		{
+			robot_directions.push_back( Point2f( (contours[i][2].x + contours[i][3].x)/2.0f, (contours[i][2].y + contours[i][3].y)/2.0f) );
+		}else 
+		{
+			robot_directions.push_back( Point2f( (contours[i][0].x + contours[i][1].x)/2.0f, (contours[i][0].y + contours[i][1].y)/2.0f) );
+		}
+	}
+	return robot_directions;
+}
 
 
 

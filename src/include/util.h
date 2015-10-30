@@ -5,9 +5,13 @@
 #include <opencv2/opencv.hpp>
 #include <sys/time.h>
 
+using namespace cv;
+
 int readCalibrationResult(char* filename, cv::Mat& K, cv::Mat& distCoeff, int& image_width, int& image_height);
 double normalize_angle(double angle);
+void drawrect(Mat& img, RotatedRect rect, Scalar color);
 
+void rect_to_contour(RotatedRect rect, std::vector<Point2f>& contour);
 
 template<class TYPE>
 double angle(TYPE p1, TYPE p2)
@@ -33,7 +37,7 @@ double cross_product(TYPE p1, TYPE p2)
 	return p1.x*p2.x + p1.y*p2.y;
 }
 
-double normalize_angle_radian(double ang);
+double normalize_angle_radian(double ang);	
 
 
 static inline uint64_t get_timestamp()
