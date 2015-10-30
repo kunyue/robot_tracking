@@ -829,6 +829,9 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
     Mat hsv, hue, mask, mask2;
 
     static Mat hist, backproj, histimg = Mat::zeros(200, 320, CV_8UC3);
+    static std::vector<Mat> hists;
+    static vector<Rect> trackWindows;
+
 
 	static int frame_cnt = 0;
     static int detect_cnt = 0;
@@ -845,11 +848,13 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 		return robotPosition;
 	}
 	
-	//remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 
 	
 	if(track_state == DETECTING)
 	{
+		
+		cout << "detecting: " << " ";
 		robotSegment(frame, mask);
 		
 		imshow("mask", mask);
@@ -867,6 +872,10 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 			cvtColor(frame, hsv, COLOR_BGR2HSV);
 			
 			//initialize for tracking
+			hists.clear();
+			trackWindows.clear();
+
+
 			for (int i = 0; i < 1; ++i)
 			{
 				Rect selection = boundingRect(contourPoly[i]);
@@ -895,8 +904,11 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
                 calcHist(&roi, 1, 0, maskroi, hist, 1, &hsize, &phranges);
                 
                 normalize(hist, hist, 0, 255, NORM_MINMAX);
-  
                 trackWindow = selection;
+
+                hists.push_back(hist);
+                trackWindows.push_back(trackWindow);
+
 				#if 0
                 histimg = Scalar::all(0);
                 int binW = histimg.cols / hsize;
@@ -920,31 +932,48 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 	}else if(track_state == TRACKING)
 	{
 	 	
+	 	cout << "tracking: " << hists.size() << " robots" << endl; 
 	 	cvtColor(frame, hsv, COLOR_BGR2HSV);	
-         int ch[] = {0, 0};
+        
+        int ch[] = {0, 0};
         hue.create(hsv.size(), hsv.depth());
         mixChannels(&hsv, 1, &hue, 1, ch, 1);
 
-	 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
-       	
- 
-        //backproj &= mask;
-        
-        cout << "backproj.size(): "<< backproj.size() << endl;
-        cout << "trackWindow: " << trackWindow << endl;
+        int success_track_cnt = 0;
+
+        for (int i = 0; i < hists.size(); ++i)
+        {
+        	hists[i].copyTo(hist);
+        	trackWindow = trackWindows[i]; 
+        	//infomation from the past frame,  1 hist, 2, trackWindow
+		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
+	        //backproj &= mask;
+	       
+	        //cout << "trackWindow: " << trackWindow << endl;
 
 
-        RotatedRect trackBox = CamShift(backproj, trackWindow,
-                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
-        
-        if( trackWindow.area() <= EFF_AREA_MIN_THRESHOLD || trackWindow.area() > EFF_AREA_MAX_THRESHOLD)
+	        RotatedRect trackBox = CamShift(backproj, trackWindow,
+	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
+	        
+	        if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD && trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
+	        {
+	        	//track_state = DETECTING;
+	        	success_track_cnt++;
+	        }
+         	//cvtColor( backproj, frame, COLOR_GRAY2BGR );
+
+        	ellipse( frame, trackBox, Scalar(0, 0, 255), 3, 8);
+
+	    	
+        }
+
+        double track_rate = (double)success_track_cnt/hists.size();
+        //if(track_rate < 0.5)
+        if(success_track_cnt <= 0)
         {
         	track_state = DETECTING;
         }
-    	
-        if( backprojMode )
-            cvtColor( backproj, frame, COLOR_GRAY2BGR );
-        ellipse( frame, trackBox, Scalar(0,0,255), 3, 8 );
+       
 
 	}
 	imshow("frame", frame);
