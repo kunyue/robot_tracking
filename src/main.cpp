@@ -120,7 +120,7 @@ int main(int argc, char **argv)
             robot.header.stamp = tImage;
             robot.header.frame_id = "world";
 
-            if (robotPosition.size() >= 1)
+            if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
                 Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0, 3));
                 robot.pose.position.x = rob_pos.x();
