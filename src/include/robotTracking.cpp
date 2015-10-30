@@ -735,7 +735,7 @@ int vmin = 10, vmax = 256, smin = 0;
 
 
 //use camshift to track the robot
-std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
+std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 {
 	int64_t start = get_timestamp();   
 
@@ -761,11 +761,9 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
     double diff = 0.0;
 	
     vector< vector<Point> > contourPoly;
-    vector<RobotFeature>  robot_features;
 
- 
 	char label[3];
-	std::vector<Eigen::VectorXd> robotPose;//output
+	std::vector<Eigen::Vector3d> robotPose;//output
 
 	if(frame.empty() ) 
 	{
@@ -773,16 +771,15 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 	}
 	
 	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
-	robotSegment(frame, color_mask);//mask for red and green region 
+	
 
 	// imshow("mask", color_mask);
 
 	if(track_state == DETECTING)
 	{
 		
+		robotSegment(frame, color_mask);//mask for red and green region 
 		//cout << "detecting: " << " ";
-
-		
 		//waitKey(10);
 		//contourPoly = findPattern(mask);
 
@@ -802,8 +799,6 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 				Rect selection = boundingRect(contourPoly[i]); 
 
 				//Rect selection = maxRect();
-
-
 				cvtColor(frame, hsv, COLOR_BGR2HSV);
 
 
@@ -834,22 +829,6 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
                 hists.push_back(hist);
                 trackWindows.push_back(trackWindow);
 
-				#if 0
-                histimg = Scalar::all(0);
-                int binW = histimg.cols / hsize;
-                Mat buf(1, hsize, CV_8UC3);
-                for( int i = 0; i < hsize; i++ )
-                    buf.at<Vec3b>(i) = Vec3b(saturate_cast<uchar>(i*180./hsize), 255, 255);
-                cvtColor(buf, buf, COLOR_HSV2BGR);
-                for( int i = 0; i < hsize; i++ )
-                {
-                    int val = saturate_cast<int>(hist.at<float>(i)*histimg.rows/255);
-                    rectangle( histimg, Point(i*binW,histimg.rows),
-                               Point((i+1)*binW,histimg.rows - val),
-                               Scalar(buf.at<Vec3b>(i)), -1, 8 );
-                }
-				#endif 
-	            
 			}
 		
 
@@ -893,13 +872,12 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 
         		trackWindows[i] = trackWindow;
 
-		        rect_to_contour(resize_rect(trackBox, 1.0), contour);
+		        rect_to_contour(trackBox, contour);
 		        //cout << "contour: " << contour << endl;
 		        contours.push_back(contour);
 		        
 	        }
 	        
-
         }
 
         double track_rate = (double)success_track_cnt/hists.size();
@@ -912,14 +890,14 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 	}
 	
 
-	std::vector<Point2f> mass_centers, shape_centers;
+	//std::vector<Point2f> mass_centers, shape_centers;
 	//std::vector<Point2f> mass_centers = mass_center(contours, color_mask);
-	//std::vector<Point2f> shape_centers = shape_center(contours);
+	std::vector<Point2f> shape_centers = shape_center(contours);
 
-	robot_center(contours, color_mask, shape_centers, mass_centers);
-	std::vector<Point2f> dir_centers = robot_direction(contours, mass_centers, shape_centers);
+	//robot_center(contours, color_mask, shape_centers, mass_centers);
+	//std::vector<Point2f> dir_centers = robot_direction(contours, mass_centers, shape_centers);
 	
-	robotPose = normalized_robot_pose(shape_centers, dir_centers);
+	robotPose = normalized_robot_pose(shape_centers);
 	
 	//imshow("frame", frame);
 	//waitKey(20);
@@ -931,9 +909,8 @@ std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
 		drawContours(frame, contours, i, color, 2, 8);
 		
 		circle(frame, shape_centers[i], 2.0, color, 2, 8);
-		circle(frame, dir_centers[i], 2.0, color, 2, 8);
+		//circle(frame, dir_centers[i], 2.0, color, 2, 8);
 	}
-
 	return robotPose;
 }
 
@@ -1063,20 +1040,18 @@ std::vector<Eigen::VectorXd> robotCenter(vector< RobotFeature > & features, std:
 
 
 //normlized position
-std::vector<Eigen::VectorXd> normalized_robot_pose(
-	std::vector<Point2f> shape_centers, 
-	std::vector<Point2f> dir_centers)
+std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_centers)
 {
 	
 	float radius = 0.0;
-	std::vector<Eigen::VectorXd> normlizedCenter;
+	std::vector<Eigen::Vector3d> normlizedCenter;
 	cv::Mat src = Mat::zeros(1, 2, CV_32FC2);
 	cv::Mat m = Mat::zeros(3, 1, CV_64FC1);
 	std::vector<Point2f> p2;
 
 	for(int i = 0; i < shape_centers.size(); i++)
 	{
-		 Eigen::VectorXd cc(6);
+		 Eigen::Vector3d cc;
 		 m.at<double>(0) = shape_centers[i].x;
 		 m.at<double>(1) = shape_centers[i].y;
 		 m.at<double>(2) = 1.0;
@@ -1084,16 +1059,16 @@ std::vector<Eigen::VectorXd> normalized_robot_pose(
 		 cc(0) = m.at<double>(0);
 		 cc(1) = m.at<double>(1);
 		 cc(2) = m.at<double>(2);
-		 
+
 		 //direction:
-		 m.at<double>(0) = dir_centers[i].x;
-		 m.at<double>(1) = dir_centers[i].y;
-		 m.at<double>(2) = 1.0;
-		 m = K.inv()*m;
-		 cc(3) = m.at<double>(0);
-		 cc(4) = m.at<double>(1);
-		 cc(5) = m.at<double>(2);
-	 	normlizedCenter.push_back(cc);
+		 // m.at<double>(0) = dir_centers[i].x;
+		 // m.at<double>(1) = dir_centers[i].y;
+		 // m.at<double>(2) = 1.0;
+		 // m = K.inv()*m;
+		 // cc(3) = m.at<double>(0);
+		 // cc(4) = m.at<double>(1);
+		 // cc(5) = m.at<double>(2);
+	 	 normlizedCenter.push_back(cc);
 	}
 	return normlizedCenter;
 }
@@ -1320,13 +1295,15 @@ void robot_center(std::vector< std::vector<Point> > contours,
 
 vector<Point2f> shape_center(std::vector< std::vector<Point> >& contours)
 {
+	
 	Point2f center;
 	float radius = 0.0;
-	std::vector<Point2f> centers;
+	std::vector<Point2f> centers;   
 	for(int i = 0; i < contours.size(); i++)
 	{
-		 minEnclosingCircle( contours[i], center, radius);
-		 centers.push_back(center);
+		minEnclosingCircle( contours[i], center, radius);
+		centers.push_back(center);
+		centers.push_back(center);
 	}
 	return centers;
 } 

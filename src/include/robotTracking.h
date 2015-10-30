@@ -25,7 +25,7 @@ int robotTrackInit(char* calib_filename, char*  green_svm_filename, char* red_sv
 vector< vector<Point> > findPattern(Mat& bwImg);;
 
 std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);
-std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame);
+std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame);
 
 void robot_center(std::vector< std::vector<Point> > contours, 
 				Mat& color_mask, 
@@ -54,9 +54,7 @@ void update_robot_list( vector<RobotFeature>& all_robot,
 						vector< vector<Point> >& current_contourPoly, 
 						vector<std::pair<int, int> >& matches);
 						
-std::vector<Eigen::VectorXd> normalized_robot_pose(
-	std::vector<Point2f> shape_centers, 
-	std::vector<Point2f> dir_centers);
+std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_centers);
 
 
 //std::vector< std::vector<cv::Point> > robotDetect(cv::Mat &frame, cv::Mat& K, cv::Mat& distCoeff);

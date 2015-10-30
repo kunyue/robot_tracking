@@ -147,17 +147,20 @@ int main(int argc, char **argv)
             }
 
             printf("detection %f %f\n", image_q[0].first, it->first);
+            double whole_t = clock();
 
             geometry_msgs::PoseStamped  robot;
             robot.header.stamp = ros::Time(image_q[0].first);
             image = image_q[0].second;
             image_q.pop_front();
             robot.header.frame_id = "world";
-            std::vector<Eigen::VectorXd> robotPosition = camshiftTrack(image);
+            std::vector<Eigen::Vector3d> robotPosition = camshiftTrack(image);
 
             puts("set pose");
             pos_body = it->second.first;
             att_body = it->second.second;
+
+
 
             bool succ = false;
 
@@ -208,6 +211,7 @@ int main(int argc, char **argv)
                 robot.pose.orientation.w = 1;
             }
             p1.publish(robot);
+            printf("whole_t %f\n", (clock() - whole_t) / CLOCKS_PER_SEC);
 
             if (image_view)
             {

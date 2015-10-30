@@ -35,7 +35,7 @@ int main(int argc, char** argv)
 
 	//1. init
 	int ret = robotTrackInit("../../../config/camera_binning.yml", "../../../config/color_red_bluefox.yml", "../../../config/color_green_bluefox.yml");
-	std::vector<Eigen::VectorXd> robotPosition;//normalized position
+	std::vector<Eigen::Vector3d> robotPosition;//normalized position
 	Mat frame;
     VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
     //VideoCapture cap("/home/libing/grid-irobot_2015-10-20-23-10-52.avi"); 
