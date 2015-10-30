@@ -38,6 +38,12 @@ const Scalar WHITE = Scalar(255, 255, 255);
 const int COLOR_CNT = 6;
 const Scalar ColorTable[COLOR_CNT] = {RED, PINK, BLUE, LIGHTBLUE, GREEN, WHITE};
 
+enum
+{
+	TRACKING = 0x01,
+	DETECTING = 0x02,
+}TRACKING_STATE;
+
 
 vector<Point> alignShape(vector<Point>& contour);
 vector< vector<Point> > findPattern(Mat& bwImg);
@@ -714,8 +720,8 @@ std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
 	
 	#else 
 	robotSegment(frame, mask);
-	imshow("mask", mask);
-	waitKey(10);
+	//imshow("mask", mask);
+	//waitKey(10);
 	//contourPoly = findPattern(mask);
 	mask.copyTo(mask2);
 	contourPoly = findBox(mask2);//find contours will destory the image 
@@ -796,6 +802,190 @@ std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
 	return robotPosition;
 }
 
+/*
+//use camshift to track the robot
+std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame)
+{
+	int64_t start = get_timestamp();   
+
+	static int track_state = DETECTING;
+
+
+	static int frame_cnt = 0;
+    static int detect_cnt = 0;
+    double diff = 0.0;
+	
+    vector< vector<Point> > contourPoly;
+    vector<RobotFeature>  robot_features;
+
+ 
+	char label[3];
+	Mat mask, mask2;
+	std::vector<Eigen::VectorXd> robotPosition;
+	if(frame.empty() ) 
+	{
+		return robotPosition;
+	}
+	
+	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+
+
+	if(track_state == DETECTING)
+	{
+		robotSegment(frame, mask);
+		imshow("mask", mask);
+		waitKey(10);
+		//contourPoly = findPattern(mask);
+		mask.copyTo(mask2);
+		contourPoly = findBox(mask2);//find contours will destory the image 
+
+		if(contourPoly.size() >= 1)
+		{
+			track_state = TRACKING;
+			//initialize for tracking
+			for (int i = 0; i < contourPoly.size(); ++i)
+			{
+				Rect rect = boundingRect(contourPoly[i]);
+				            cvtColor(image, hsv, COLOR_BGR2HSV);
+
+	            if( trackObject )
+	            {
+	                int _vmin = 0; 
+	                int _vmax = 255;
+
+	                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)),
+	                        Scalar(180, 256, MAX(_vmin, _vmax)), mask);
+
+	                int ch[] = {0, 0};
+	                hue.create(hsv.size(), hsv.depth());
+	                mixChannels(&hsv, 1, &hue, 1, ch, 1);
+
+	                if( trackObject < 0 )
+	                {
+	                    Mat roi(hue, selection), maskroi(mask, selection);
+	                    calcHist(&roi, 1, 0, maskroi, hist, 1, &hsize, &phranges);
+	                    normalize(hist, hist, 0, 255, NORM_MINMAX);
+
+	                    trackWindow = selection;
+	                    trackObject = 1;
+
+	                    histimg = Scalar::all(0);
+	                    int binW = histimg.cols / hsize;
+	                    Mat buf(1, hsize, CV_8UC3);
+	                    for( int i = 0; i < hsize; i++ )
+	                        buf.at<Vec3b>(i) = Vec3b(saturate_cast<uchar>(i*180./hsize), 255, 255);
+	                    cvtColor(buf, buf, COLOR_HSV2BGR);
+
+	                    for( int i = 0; i < hsize; i++ )
+	                    {
+	                        int val = saturate_cast<int>(hist.at<float>(i)*histimg.rows/255);
+	                        rectangle( histimg, Point(i*binW,histimg.rows),
+	                                   Point((i+1)*binW,histimg.rows - val),
+	                                   Scalar(buf.at<Vec3b>(i)), -1, 8 );
+	                    }
+	                }
+
+	                calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
+	                backproj &= mask;
+	                RotatedRect trackBox = CamShift(backproj, trackWindow,
+	                                    TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
+	                if( trackWindow.area() <= 1 )
+	                {
+	                    int cols = backproj.cols, rows = backproj.rows, r = (MIN(cols, rows) + 5)/6;
+	                    trackWindow = Rect(trackWindow.x - r, trackWindow.y - r,
+	                                       trackWindow.x + r, trackWindow.y + r) &
+	                                  Rect(0, 0, cols, rows);
+	                }
+
+	                if( backprojMode )
+	                    cvtColor( backproj, image, COLOR_GRAY2BGR );
+	                ellipse( image, trackBox, Scalar(0,0,255), 3, LINE_AA );
+	            }
+			}
+		
+
+		}
+
+	}else if(track_state == TRACKING)
+	{
+		
+
+	}
+
+
+
+	std::vector<Point2f> mass_centers = mass_center(contourPoly ,mask);
+	std::vector<Point2f> shape_centers = shape_center(contourPoly);
+	std::vector<Point2f> robot_directions = robot_direction(contourPoly, mass_centers, shape_centers);
+
+
+	// for (unsigned int i = 0; i < contourPoly.size(); i++)
+	// {
+	// 	Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
+		
+	// 	line(frame, mass_centers[i], shape_centers[i],  color, 2, 8);
+	// 	circle(frame, shape_centers[i], 2.0, color, 2, 8);
+	// 	circle(frame, shape_centers[i], 2.0, color, 2, 8);
+	// 	circle(frame, robot_directions[i], 2.0, color, 2, 8);
+	// 	cout << (shape_centers[i] - mass_centers[i]) << endl;
+	// }
+
+
+
+	//calc_features(frame, contourPoly, robot_features);
+	calc_features(frame, contourPoly, shape_centers, mass_centers, robot_directions, robot_features);
+	robotMatch(all_robot, robot_features, matches);
+	
+
+
+	update_robot_list(all_robot, all_contourPoly, observe_cnt, robot_features, contourPoly, matches);
+	
+	//eff_contourPoly = effective_contourPoly(all_contourPoly, observe_cnt);
+
+	std::vector<int> eff_ids = effective_id(observe_cnt);
+
+
+	int count = 0;
+	for (unsigned int i = 0; i < all_contourPoly.size(); i++)
+	{
+		if(eff_ids[i])
+		{
+			Scalar color = ColorTable[count%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
+			drawContours(frame, all_contourPoly, i, color, 2, 8);
+			
+			circle(frame, all_robot[i].shape_center, 2.0, color, 2, 8);
+			circle(frame, all_robot[i].dir_center, 2.0, color, 2, 8);
+			count++;
+		}
+		
+	}
+	
+	//TODO 
+	robotPosition = robotCenter(all_robot, eff_ids);
+
+	
+	// for (unsigned int i = 0; i < eff_contourPoly.size(); i++)
+	// {
+	// 	Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
+	// 	drawContours(frame, eff_contourPoly, i, color, 2, 8);
+	// 	circle(frame, eff_contourPoly[i][0], 2.0, color, 2, 8);
+	// 	circle(frame, eff_contourPoly[i][1], 2.0, color, 2, 8);
+	// }
+	
+	
+	frame_cnt++;
+	detect_cnt += contourPoly.size();
+	
+	double detect_rate = (double)detect_cnt/frame_cnt; //average robot in one frame
+    //printf("\ndetect rate: %f", detect_rate);
+	
+	int64_t current = get_timestamp();   
+	double cost_time = (current - start)/1000000.0;
+	//cout << "cost time: " << cost_time << endl;  
+	return robotPosition;
+}
+
+*/
 
 /*
 std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
