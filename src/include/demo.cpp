@@ -53,8 +53,9 @@ int main(int argc, char** argv)
 		cnt++;
 		if(cnt < 200) continue;
 		//2. track
-		robotPosition = robotTrack(frame);
-		cout << robotPosition.size() << " robotPos: " << "\n";
+		//robotPosition = robotTrack(frame);
+		robotPosition = camshiftTrack(frame);
+			cout << robotPosition.size() << " robotPos: " << "\n";
 		for (unsigned int i = 0; i < robotPosition.size(); i++)
 		{
 			cout << robotPosition[i].transpose() <<  endl;

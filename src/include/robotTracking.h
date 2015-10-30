@@ -23,6 +23,7 @@ int robotTrackInit(char* calib_filename, char*  green_svm_filename, char* red_sv
 vector< vector<Point> > findPattern(Mat& bwImg);;
 
 std::vector<Eigen::VectorXd> robotTrack(cv::Mat& frame);
+std::vector<Eigen::VectorXd> camshiftTrack(Mat& frame);
 
 void robotMatch(vector<RobotFeature>& r1, vector<RobotFeature>& r2, vector<std::pair<int, int> >& matches);
 
