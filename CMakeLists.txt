@@ -41,6 +41,8 @@ catkin_package(
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3  REQUIRED)
+find_package(camera_model REQUIRED)
+
 ###########
 ## Build ##
 ###########

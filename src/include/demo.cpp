@@ -28,12 +28,21 @@ int demo_edge_based(int argc, char** argv);
 
 int main(int argc, char** argv) 
 {
-	
 	//demo_edge_based(argc, argv);
 	//return 0;
-
+	
+	
 	//1. init
-	int ret = robotTrackInit("../../../config/camera_binning.yml", "../../../config/color_red_bluefox.yml", "../../../config/color_green_bluefox.yml");
+	int ret = robotTrackInit("../../../config/camera_camera_calib_mei.yaml",/*"../../../config/camera_binning.yml", */
+		"../../../config/color_red_bluefox.yml", 
+		"../../../config/color_green_bluefox.yml");
+
+	if(ret == -1)
+	{
+		cout << "failed to init " << endl;
+		return 0;
+	}
+	
 	std::vector<Eigen::Vector3d> robotPosition;//normalized position
 	Mat frame;
     VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 

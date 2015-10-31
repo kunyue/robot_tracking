@@ -16,10 +16,11 @@
 
 using namespace std;
 using namespace cv;
+using Eigen::Vector3d;
 //using cv::ml::SVM;
 
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
-#define EDGE_BASED 0//1 edge based; color based method 
+//#define EDGE_BASED 0//1 edge based; color based method 
 
 #define EFF_AREA_MIN_THRESHOLD 200.0
 #define EFF_AREA_MAX_THRESHOLD 5000.0
@@ -57,6 +58,9 @@ cv::Mat map1, map2; //for undistortion
 
 const int table_scale = 2; 
 unsigned char colorMap[256/table_scale][256/table_scale][256/table_scale];
+
+//calibration parameter for cetacamera
+double m_xi, m_k1, m_k2, m_p1, m_p2, m_gamma1, m_gamma2, m_u0, m_v0; 
 
 
 vector< vector<Point> > findBox(Mat& bwImg)
@@ -223,19 +227,19 @@ vector< vector<Point> > robotDetect(cv::Mat &frame/*, cv::Mat& K, cv::Mat& distC
 
 int robotTrackInit(char* calib_filename, char* green_svm_filename, char* red_svm_filename) 
 {
-	#if EDGE_BASED == 1
-		return calibInit(calib_filename);
-	#else
-		int ret2 = calibInit(calib_filename);
-		int ret1 =  svmInit(green_svm_filename, red_svm_filename);
-		if(ret1 == -1 || ret2 == -1)
-		{
-			return -1;
-		}else 
-		{
-			return 0;
-		}
-	#endif 
+
+	int ret1 =  svmInit(green_svm_filename, red_svm_filename);
+	//int ret2 = calibInit(calib_filename);
+	int ret2 = readCetaCamera(calib_filename);
+
+	if(ret1 == -1 || ret2 == -1)
+	{
+		return -1;
+	}else 
+	{
+		return 0;
+	}
+
 }
 
 
@@ -311,7 +315,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 		return robotPose;
 	}
 	
-	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+	//remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	
 	if(track_state == DETECTING)
 	{
@@ -413,7 +417,9 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	
 
 	std::vector<Point2f> shape_centers = shape_center(robot_rects);
-	robotPose = normalized_robot_pose(shape_centers);
+	//robotPose = normalized_robot_pose(shape_centers);
+	robotPose = cetaUndistPoint(shape_centers);
+
 	for (unsigned int i = 0; i < robot_rects.size(); i++)
 	{
 		Scalar color = ColorTable[i%COLOR_CNT];
@@ -485,6 +491,8 @@ std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_ce
 	}
 	return normlizedCenter;
 }
+
+
 
 int svmInit(char*  filename1, char* filename2)
 {
@@ -614,5 +622,89 @@ vector<Point2f> shape_center(std::vector< RotatedRect >& rects)
 	}
 	return centers;
 } 
-     
+
    
+//CataCamera
+int readCetaCamera(const std::string& filename)
+{
+    cv::FileStorage fs(filename, cv::FileStorage::READ);
+ 	cout << __FILE__ << " " << __LINE__ << endl;
+    if (!fs.isOpened())
+    {
+        return -1;
+    }
+    cout << __FILE__ << " " << __LINE__ << endl;
+    if (!fs["model_type"].isNone())
+    {
+        std::string sModelType;
+        fs["model_type"] >> sModelType;
+
+        if (sModelType.compare("MEI") != 0)
+        {
+            return -1;
+        }
+    }
+    cout << __FILE__ << " " << __LINE__ << endl;
+    string m_cameraName;
+    fs["camera_name"] >> m_cameraName;
+    image_width = static_cast<int>(fs["image_width"]);
+    image_height = static_cast<int>(fs["image_height"]);
+    cout << __FILE__ << " " << __LINE__ << endl;
+    cv::FileNode n = fs["mirror_parameters"];
+    m_xi = static_cast<double>(n["xi"]);
+
+    n = fs["distortion_parameters"];
+    m_k1 = static_cast<double>(n["k1"]);
+    m_k2 = static_cast<double>(n["k2"]);
+    m_p1 = static_cast<double>(n["p1"]);
+    m_p2 = static_cast<double>(n["p2"]);
+    cout << __FILE__ << " " << __LINE__ << endl;
+    n = fs["projection_parameters"];
+    m_gamma1 = static_cast<double>(n["gamma1"]);
+    m_gamma2 = static_cast<double>(n["gamma2"]);
+    m_u0 = static_cast<double>(n["u0"]);
+    m_v0 = static_cast<double>(n["v0"]);
+
+    cout << "m_xi: " << m_xi << "m_k1: " << m_k1 << " m_k2:" << m_k2 << "  m_gamma1: " << m_gamma1
+    	<< " m_gamma2: " << m_gamma2 << endl;
+
+    return 0;
+}
+
+
+ vector<Eigen::Vector3d> cetaUndistPoint(std::vector<Point2f>& points)
+ {
+ 	vector<Eigen::Vector3d> normlized_points;
+	double m_inv_K11 = 1.0 / m_gamma1;
+    double m_inv_K13 = -m_u0 / m_gamma1;
+    double m_inv_K22 = 1.0 / m_gamma2;
+    double m_inv_K23 = -m_v0 / m_gamma2;
+
+    const double fScale = 1.0;//TODO 
+
+    cout << "m_xi: " << m_xi << "  m_gamma1: " << m_gamma1 << endl;
+ 	for (int i = 0; i < points.size(); ++i)
+ 	{
+		cout << "point: " << points[i] << endl;
+		double u = points[i].x;
+		double v = points[i].y;
+
+		double mx_u = m_inv_K11 / fScale * u + m_inv_K13 / fScale;
+		double my_u = m_inv_K22 / fScale * v + m_inv_K23 / fScale;
+
+		double xi = m_xi;
+		double d2 = mx_u * mx_u + my_u * my_u;
+
+		Eigen::Vector3d P;
+		P << mx_u, my_u, 1.0 - xi * (d2 + 1.0) / (xi + sqrt(1.0 + (1.0 - xi * xi) * d2));
+
+		P /= P(2);
+		cout << "normalized: " << P << endl;
+		normlized_points.push_back(P);
+		//Eigen::Vector2d p;
+		//spaceToPlane(P, p);
+ 	}
+
+ 	return normlized_points;
+
+ }
