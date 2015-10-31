@@ -168,15 +168,10 @@ int main(int argc, char **argv)
             if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
                 Eigen::Vector3d rob_pos = get_robot_position(robotPosition[0].segment(0, 3));
-                robot.pose.position.x = rob_pos.x();
-                robot.pose.position.y = rob_pos.y();
-                robot.pose.position.z = rob_pos.z();
-                
 
                 robot_p_q.push_back(make_pair(tImage.toSec(), rob_pos));
 
-                //cout << "sd: " << robotPosition[0].transpose() << endl; 
-                cout << "robot pose: "<< rob_pos.x() << " \t " << rob_pos.y() << " \t " << rob_pos.z() << endl;
+                ROS_INFO("robot pose: %f %f %f", rob_pos.x(), rob_pos.y(), rob_pos.z());
 
                 if(robot_p_q.size() >= buffer_size)
                 {
@@ -186,21 +181,28 @@ int main(int argc, char **argv)
                     Eigen::Vector3d head_ori = dp / dt;
                     double head_angle = atan2(head_ori.y(), head_ori.x());
 
-                    cout << "robot speed: " << head_ori.transpose().norm() << endl;
-                    cout << "ori: " << 180 * head_angle / M_PI << endl;
+                    ROS_INFO("robot speed: %f, angle: %f", head_ori.transpose().norm(), 180 * head_angle / M_PI);
 
-                    if (head_ori.norm() > 0.15)// TODO
-                    {
-                        Eigen::Quaterniond robot_ori;
-                        robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
-                        robot.pose.orientation.x = robot_ori.x();
-                        robot.pose.orientation.y = robot_ori.y();
-                        robot.pose.orientation.z = robot_ori.z();
-                        robot.pose.orientation.w = robot_ori.w();
-                        succ = true;
-                    }
+                    robot.pose.position.x = rob_pos.x();
+                    robot.pose.position.y = rob_pos.y();
+                    robot.pose.position.z = head_ori.norm();
+                    
+                    Eigen::Quaterniond robot_ori;
+                    robot_ori = AngleAxisd(head_angle, Eigen::Vector3d::UnitZ());
+                    robot.pose.orientation.x = robot_ori.x();
+                    robot.pose.orientation.y = robot_ori.y();
+                    robot.pose.orientation.z = robot_ori.z();
+                    robot.pose.orientation.w = robot_ori.w();
+                    succ = true;
                 }
+                else
+                    ROS_INFO("accumulating pose");
+            }else
+            {
+                ROS_INFO("robot lost");
+                robot_p_q.clear();
             }
+
             // publish invalid position
             if (!succ) {
                 robot.pose.position.x = invalid_pos_x;
@@ -212,7 +214,7 @@ int main(int argc, char **argv)
                 robot.pose.orientation.w = 1;
             }
             p1.publish(robot);
-            printf("whole_t %f\n", (clock() - whole_t) / CLOCKS_PER_SEC);
+            //printf("whole_t %f\n", (clock() - whole_t) / CLOCKS_PER_SEC);
 
             if (image_view)
             {
