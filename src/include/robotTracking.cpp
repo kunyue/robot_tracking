@@ -12,7 +12,7 @@
 
 #include <opencv2/opencv.hpp>
 #include "util.h"
-#include "lap.h"
+
 
 using namespace std;
 using namespace cv;
@@ -45,65 +45,27 @@ enum
 }TRACKING_STATE;
 
 
-vector<Point> alignShape(vector<Point>& contour);
-vector< vector<Point> > findPattern(Mat& bwImg);
+
 vector< vector<Point> > findBox(Mat& bwImg);
-vector<cv::Point2d> getTemplate();
-std::vector<Eigen::VectorXd> robotCenter(vector< RobotFeature > & features, std::vector<int>& eff_id);
-
-vector<Point2f> shape_center(std::vector< std::vector<Point> >& contours);
-
-
-vector<Point2f> mass_center(std::vector< std::vector<Point> > contours, Mat& color_mask);
-
-// template<class T>
-// std::vector<Point2f> robot_direction(std::vector< std::vector<T> > contours, vector<T>&mass_centers, vector<T>& shape_centers);
-
+vector<Point2f> shape_center(std::vector< RotatedRect >& contours);
 std::vector<Eigen::VectorXd> robot_pos_dir(vector< Point2f >& shape_centers, std::vector<Point2f>& robot_directions);
-
-
-vector< int > effective_id(vector< queue<int> > observe_cnt);
 
 cv::Mat K, distCoeff;
 int image_width, image_height;
 cv::Mat map1, map2; //for undistortion
 
 
-//color-based 
-//Ptr<SVM> svm_red;
-//Ptr<SVM> svm_green;
-
 const int table_scale = 2; 
 unsigned char colorMap[256/table_scale][256/table_scale][256/table_scale];
-vector<cv::Point2d> getTemplate()
-{
-	vector<Point2d> robotPattern(8);
-	robotPattern[0] = Point2d(-12.7, 0);
-	robotPattern[1] = Point2d(12.7, 0);
-	robotPattern[2] = Point2d(12.7, 11.43);
-	robotPattern[3] = Point2d(5.08, 11.43);
-	robotPattern[4] = Point2d(5.08, 15.24);
-	robotPattern[5] = Point2d(-5.08, 15.24);
-	robotPattern[6] = Point2d(-5.08, 11.43);
-	robotPattern[7] = Point2d(-12.7, 11.43);	
-	return robotPattern;
-}
-
 
 
 vector< vector<Point> > findBox(Mat& bwImg)
 {
 	vector< vector<Point> > contours, contoursPoly;
-
 	vector<Vec4i>hierarchy;
-	int64_t start = 0, end = 0;
-	
-	//start = get_timestamp();  
-	findContours(bwImg, contours, hierarchy, /*CV_RETR_LIST*/ CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-	//end = get_timestamp();
-	//cout << "find contours: " << (end - start)/1000000.0 << endl;
-	//start = get_timestamp();	
-	//vector<RotatedRect> minRect;
+	int64_t start = 0, end = 0; 
+	findContours(bwImg, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
 	for(int i = 0; i < contours.size(); i++)
 	{
 		double area = contourArea(contours[i]);
@@ -112,7 +74,7 @@ vector< vector<Point> > findBox(Mat& bwImg)
 		{
 			
 			RotatedRect rect = minAreaRect( Mat(contours[i]) );
-			//minRect.push_back(rect);
+			
 			Point2f vertices[4];
 			rect.points(vertices);
 			double len1 = distance(vertices[0], vertices[1]);
@@ -134,119 +96,13 @@ vector< vector<Point> > findBox(Mat& bwImg)
 			{
 				contour.push_back(vertices[j]);
 			}
-			contour = alignShape(contour);
+			//contour = alignShape(contour);
 			contoursPoly.push_back(contour);
 		}
 	}
 
 	return contoursPoly;
 }
-
-
-vector< vector<Point> > findPattern(Mat& bwImg)
-{
-	vector< vector<Point> > contours, contoursPoly;
-	vector<Point> contour;
-	vector<Vec4i>hierarchy;
-	int64_t start = 0, end = 0;
-	
-	//start = get_timestamp();  
-	findContours(bwImg, contours, hierarchy, /*CV_RETR_LIST*/ CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-	//end = get_timestamp();
-	//cout << "find contours: " << (end - start)/1000000.0 << endl;
-	//start = get_timestamp();	
-	for(int i = 0; i < contours.size(); i++)
-	{
-		double area = contourArea(contours[i]);
-		
-		if(area > EFF_AREA_MIN_THRESHOLD && area < EFF_AREA_MAX_THRESHOLD)
-		{
-			approxPolyDP(Mat(contours[i]), contour, adaptiveFitThreshold(contours[i]), true);
-			//printf("threshold: %f", adaptiveFitThreshold(contours[i]));
-			//cout << "ploy count: " << contour.size() << endl;	
-			if(contour.size() == 8)
-			{
-				contour = alignShape(contour);
-			
-				double score = shapeMatchScore(contour, getTemplate());
-				//cout << "matchScore: " << score << endl;
-				//cout << "area " << area << endl;
-				if(score > 0.95)
-				{
-					contoursPoly.push_back(contour);
-				}
-				
-			}	
-		}
-	}
-	//end = get_timestamp();
-	//cout << "select contours: " << (end - start)/1000000.0 << endl;
-
-	return contoursPoly;
-}
-
-//contour[0] and contour[1] is the long axis
-vector<Point> alignShape(vector<Point>& contour)
-{
-	//assert(contour.size() == 8);
-	vector<Point> alignedContour(contour.size());
-	vector<float> lengths(contour.size());
-	for(int i = 0; i < contour.size(); i++)
-	{
-		lengths[i] = norm( contour[(i + 1)%contour.size()] - contour[i] );
-	} 
-	float maxVal = lengths[0];
-	int maxID = 0;
-	for(int i = 1; i < lengths.size(); i++)
-	{
-		if(lengths[i] > maxVal)
-		{
-			maxVal = lengths[i];
-			maxID = i;
-
-		}
-	}
-#if 0	
-	//clockwire and anti-clockwise
-	Point p0 = contour[maxID];
-	Point p1 = contour[(maxID + 1)%contour.size()];
-	Point p2 = contour[(maxID + 2)%contour.size()];
-	
-	bool counterClockwise = true;
-	int ang1 = atan2(p1.y - p0.y, p1.x - p0.x)/M_PI*180;
-	int ang2 = atan2(p2.y - p1.y, p2.x - p1.x)/M_PI*180;
-	if((ang2 - ang1 + 360) % 360 < 180)
-	{
-		counterClockwise = true;
-	}else
-	{
-		counterClockwise = false;
-	}
-#else 
-	bool counterClockwise = true;
-#endif 
-
-	
-	if(counterClockwise)
-	{
-		for(int i = 0; i < contour.size(); i++)
-		{
-			alignedContour[i] = contour[(i + maxID)%contour.size()];
-		}
-	}else 
-	{
-		for(int i = 0; i < contour.size(); i++)
-		{
-			alignedContour[i] = contour[(maxID + 1 - i)%contour.size()];
-		}
-	}
-
-	return alignedContour;
-}
-
-
-
-
 
 
 //main cost is at the edge part
@@ -351,9 +207,9 @@ vector< vector<Point> > robotDetect(cv::Mat &frame/*, cv::Mat& K, cv::Mat& distC
 	//cout << "edges: " << (end - start)/1000000.0 << endl;
 	
 	
-	
+	//TODO 
 	//start = get_timestamp();  
-	contourPoly = findPattern(edgeImg);
+	//contourPoly = findPattern(edgeImg);
 	//contourPoly = findBox(edgeImg);
 	//end = get_timestamp();
 	
@@ -363,179 +219,7 @@ vector< vector<Point> > robotDetect(cv::Mat &frame/*, cv::Mat& K, cv::Mat& distC
 	return contourPoly;
 }
 
-//compute features in the polygon
-void calc_features(cv::Mat img, 
-	vector< vector<Point> >& contours, 
-	std::vector<Point2f>& shape_centers, 
-	std::vector<Point2f>& mass_centers, 
-	std::vector<Point2f>& dir_centers,
-	vector<RobotFeature>& robot_features)
-{
-	assert(img.channels() == 3);
-	robot_features.clear();
-	cv::Mat mask = cv::Mat::zeros(img.rows, img.cols, CV_8UC1);
-	vector<Point> contour;
-	vector<RobotFeature> features; 
-	
-	for(int i = 0; i < contours.size(); i++)
-	{
-		mask.setTo(Scalar(0));
-		RobotFeature features;
-		contour = contours[i];
-		features.shape_center = shape_centers[i];
-		features.mass_center = mass_centers[i];
-		features.dir_center = dir_centers[i];
 
-//		fillPoly(mask, &contours[i], &npts, 1, Scalar(1)); 
-		
-		drawContours(mask, contours, i, Scalar(1), CV_FILLED);	
-		
-		int count = 0;
-		unsigned int r = 0, g = 0, b = 0;
-		for (unsigned int j = 0; j < img.rows; j++)
-		{
-			for (unsigned int k = 0; k < img.cols; k++)
-			{
-				if(mask.at<unsigned char>(j, k))
-				{
-					count++;
-					b += img.at<cv::Vec3b>(j, k)[0];
-					g += img.at<cv::Vec3b>(j, k)[1];
-					r += img.at<cv::Vec3b>(j, k)[2];
-				}				
-			}
-		}	
-		features.area =  contourArea(contours[i]);;
-		features.b = (unsigned char)(b/count);
-		features.g = (unsigned char)(g/count);
-		features.r = (unsigned char)(r/count);	
-		robot_features.push_back(features);
-	}
-}
-
-
-
-//track the robot using k-nearest path 
-void robotMatch(vector<RobotFeature>& r1, vector<RobotFeature>& r2, vector<std::pair<int, int> >& matches)
-{
-	int size1 = r1.size();
-	int size2 = r2.size();
-	int size = std::max(size1, size2);
-	matches.clear();
-	
-	double** dist_tabel = (double **) malloc(sizeof(double *) * size);
-	for (int i=0; i< size; i++)
-	{
-		dist_tabel[i] = (double *) malloc(sizeof(double) * size);
-	}
-	
-	for (int i=0; i < size; i++)
-	{
-		for (int j = 0; j < size; j++)
-		{
-			if (i >= size1 || j >= size2)//> add some dummy nodes
-			{
-				dist_tabel[i][j] = OUTLIER_THRESHOLD;
-				continue;
-			}
-			dist_tabel[i][j] = feature_dist(r1[i], r2[j]);
-		}
-	}
-	//Linear assignment problem
-	double *u, *v;
-	int *colsol, *rowsol;
-
-	rowsol = (int *) malloc(sizeof(int) * size);
-	colsol = (int *) malloc(sizeof(int) * size);
-	u = (double *) malloc(sizeof(double) * size);
-	v = (double *) malloc(sizeof(double) * size);
-
-	struct timeval t1, t2;
-
-	gettimeofday(&t1, NULL);
-	lap(size, dist_tabel, rowsol, colsol, u, v);
-	gettimeofday(&t2, NULL);
-
-	//cout << "time taken :: " << (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0 << " s" << endl;
-	//printf("\nsize: %d, %d", size1, size2);	
-	//Mat img = Mat::zeros(960, 1280, CV_8UC3);
-	int count = 0;
-	for (int i = 0; i < size; i++)
-	{
-		//int j = rowsol[i];
-		int j = colsol[i];
-		//printf("\nC[%d][%d]: %f", i, j, dist_tabel[i][j]);	
-		if(i >= r1.size())
-		{
-			matches.push_back(std::pair<int, int>(-1, j));
-			continue;
-		}else if(j >= r2.size())
-		{
-			matches.push_back(std::pair<int, int>(i, -1));
-			continue;
-		}else 
-		{
-			matches.push_back(std::pair<int, int>(i, j));
-		}
-		
-	}
-	
-	for (int i=0; i< size; i++) free(dist_tabel[i]);
-	free(dist_tabel);
-	free(colsol); free(rowsol);
-	free(u); free(v);
-}
-
-
-void update_robot_list( vector<RobotFeature>& all_robot, 
-						vector< vector<Point> >& all_contourPoly, 
-						vector< queue<int> >& observe_cnt,
-						vector<RobotFeature>& current_robot, 
-						vector< vector<Point> >& current_contourPoly, 
-						vector<std::pair<int, int> >& matches)
-{
-
-	//const int observe_history_len = 5;
-	for(int i = 0; i < matches.size(); i++)
-	{
-		int id1 = matches[i].first;
-		int id2 = matches[i].second;
-		if(id1 >= 0 && id2 >= 0)
-		{
-			all_robot[id1] = current_robot[id2];
-			all_contourPoly[id1] = current_contourPoly[id2];
-			observe_cnt[id1].push(observe_cnt[id1].back() + 1);
-		}else if(id1 < 0 && id2 >= 0) 
-		{
-			all_robot.push_back(current_robot[id2]);
-			all_contourPoly.push_back(current_contourPoly[id2]);
-			queue<int> cnt;
-			cnt.push(1);
-			observe_cnt.push_back(cnt);
-		}else if(id1 >= 0 && id2 < 0) //the robot is in the table but is not observed in this frame 
-		{
-			observe_cnt[id1].push(observe_cnt[id1].back());
-		}
-		
-		if(observe_cnt[i].size() > OBSERVE_HISTORY_LEN)//observe cnt
-		{
-			observe_cnt[i].pop();
-		}
-		
-	}
-	
-	for(int i = all_robot.size() - 1; i >= 0; i--)
-	{
-		if(observe_cnt[i].size() >= OBSERVE_HISTORY_LEN && (observe_cnt[i].back() - observe_cnt[i].front()) == 0)
-		{
-			//printf("\nremove a robot from the list");
-			all_robot.erase(all_robot.begin() + i);
-			all_contourPoly.erase(all_contourPoly.begin() + i);
-			observe_cnt.erase(observe_cnt.begin() + i);
-		}
-	}
-	
-}
 
 int robotTrackInit(char* calib_filename, char* green_svm_filename, char* red_svm_filename) 
 {
@@ -575,154 +259,9 @@ int calibInit(char* calib_filename)
     return 0;
 }
 
-//just for output
-vector< vector<Point> > effective_contourPoly(vector< vector<Point> >& all_contourPoly, vector< queue<int> > observe_cnt)
-{
-	vector< vector<Point> > eff_contourPoly;
-	for (unsigned int i = 0; i < all_contourPoly.size(); i++)
-	{
-		if(observe_cnt[i].front() > EFF_ROBOT_THRESHOLD)
-		{
-			eff_contourPoly.push_back(all_contourPoly[i]);
-		}
-	}
-	
-	return eff_contourPoly;
-}
-
-vector< int > effective_id(vector< queue<int> > observe_cnt)
-{
-	vector< int > eff_id(observe_cnt.size() );
-	for (unsigned int i = 0; i < observe_cnt.size(); i++)
-	{
-		if(observe_cnt[i].front() > EFF_ROBOT_THRESHOLD)
-		{
-			eff_id[i] = 1;
-		}else
-		{
-			eff_id[i] = 0;
-		}
-	}
-	return eff_id;
-}
-
-
-/*
-std::vector<Eigen::VectorXd> robotTrack(Mat& frame)
-{
-	
-	int64_t start = get_timestamp();   
-	static int frame_cnt = 0;
-    static int detect_cnt = 0;
-    double diff = 0.0;
-	
-    vector< vector<Point> > contourPoly, contourPoly_prev;
-    vector<RobotFeature>  robot_features, robot_features_prev;
-    std::vector< Point > robot_center; //mass center
-    
-    static vector<RobotFeature>  all_robot;//all the robots
-    static vector< vector<Point> > all_contourPoly;
-    static vector< queue<int> > observe_cnt;
-    
-    vector< vector<Point> > eff_contourPoly;//if a robot is seen for more than n times, it is an effective_tobot
-    vector<std::pair<int, int> > matches;
-	char label[3];
-	Mat mask, mask2;
-	std::vector<Eigen::VectorXd> robotPosition;
-	if(frame.empty() ) 
-	{
-		return robotPosition;
-	}
-	
-	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
-	#if EDGE_BASED == 1
-	contourPoly = robotDetect(frame);	
-	
-	#else 
-	robotSegment(frame, mask);
-	
-	//imshow("mask", mask);
-	//waitKey(10);
-	//contourPoly = findPattern(mask);
-	mask.copyTo(mask2);
-	contourPoly = findBox(mask2);//find contours will destory the image 
-
-
-	//imshow("mask", mask);
-	//waitKey(10);
-	#endif 
-
-	std::vector<Point2f> mass_centers = mass_center(contourPoly ,mask);
-	std::vector<Point2f> shape_centers = shape_center(contourPoly);
-	std::vector<Point2f> robot_directions = robot_direction(contourPoly, mass_centers, shape_centers);
-
-
-	// for (unsigned int i = 0; i < contourPoly.size(); i++)
-	// {
-	// 	Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-		
-	// 	line(frame, mass_centers[i], shape_centers[i],  color, 2, 8);
-	// 	circle(frame, shape_centers[i], 2.0, color, 2, 8);
-	// 	circle(frame, shape_centers[i], 2.0, color, 2, 8);
-	// 	circle(frame, robot_directions[i], 2.0, color, 2, 8);
-	// 	cout << (shape_centers[i] - mass_centers[i]) << endl;
-	// }
 
 
 
-	//calc_features(frame, contourPoly, robot_features);
-	calc_features(frame, contourPoly, shape_centers, mass_centers, robot_directions, robot_features);
-	robotMatch(all_robot, robot_features, matches);
-	
-
-
-	update_robot_list(all_robot, all_contourPoly, observe_cnt, robot_features, contourPoly, matches);
-	
-	//eff_contourPoly = effective_contourPoly(all_contourPoly, observe_cnt);
-
-	std::vector<int> eff_ids = effective_id(observe_cnt);
-
-
-	int count = 0;
-	for (unsigned int i = 0; i < all_contourPoly.size(); i++)
-	{
-		if(eff_ids[i])
-		{
-			Scalar color = ColorTable[count%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-			drawContours(frame, all_contourPoly, i, color, 2, 8);
-			
-			circle(frame, all_robot[i].shape_center, 2.0, color, 2, 8);
-			circle(frame, all_robot[i].dir_center, 2.0, color, 2, 8);
-			count++;
-		}
-		
-	}
-	
-	//TODO 
-	robotPosition = robotCenter(all_robot, eff_ids);
-
-	
-	// for (unsigned int i = 0; i < eff_contourPoly.size(); i++)
-	// {
-	// 	Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-	// 	drawContours(frame, eff_contourPoly, i, color, 2, 8);
-	// 	circle(frame, eff_contourPoly[i][0], 2.0, color, 2, 8);
-	// 	circle(frame, eff_contourPoly[i][1], 2.0, color, 2, 8);
-	// }
-	
-	
-	frame_cnt++;
-	detect_cnt += contourPoly.size();
-	
-	double detect_rate = (double)detect_cnt/frame_cnt; //average robot in one frame
-    //printf("\ndetect rate: %f", detect_rate);
-	
-	int64_t current = get_timestamp();   
-	double cost_time = (current - start)/1000000.0;
-	//cout << "cost time: " << cost_time << endl;  
-	return robotPosition;
-}
-*/
 
 bool backprojMode = false;
 bool selectObject = false;
@@ -737,32 +276,34 @@ int vmin = 10, vmax = 256, smin = 0;
 //use camshift to track the robot
 std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 {
-	int64_t start = get_timestamp();   
+	
 
 	static int track_state = DETECTING;
 	
-    static Rect trackWindow;
+    
     int hsize = 16;
-    float hranges[] = {0,180};
+
+    float hranges[] = {0, 180};
+
     const float* phranges = hranges;
 
-    Mat hsv, hue, mask, mask2, color_mask;
+    Mat hsv, hue, mask, color_mask;
 
-    static Mat hist, backproj, histimg = Mat::zeros(200, 320, CV_8UC3);
+    Mat hist, backproj;
+
     static std::vector<Mat> hists;
-    static vector<Rect> trackWindows;
-    static vector<RotatedRect> robot_rects;
 
-    static std::vector<Point> contour;
+    Rect trackWindow;
+    static vector<Rect> trackWindows;
+
+    vector<RotatedRect> robot_rects;
+
+    std::vector<Point> contour;
 	std::vector< vector<Point> > contours;
 
 	static int frame_cnt = 0;
     static int detect_cnt = 0;
-    double diff = 0.0;
-	
-    vector< vector<Point> > contourPoly;
 
-	char label[3];
 	std::vector<Eigen::Vector3d> robotPose;//output
 
 	if(frame.empty() ) 
@@ -772,20 +313,13 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	
 	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	
-
-	// imshow("mask", color_mask);
-
 	if(track_state == DETECTING)
 	{
 		
 		robotSegment(frame, color_mask);//mask for red and green region 
-		//cout << "detecting: " << " ";
-		//waitKey(10);
-		//contourPoly = findPattern(mask);
+		contours = findBox(color_mask);//find contours will destory the image 
 
-		contourPoly = findBox(color_mask);//find contours will destory the image 
-
-		if(contourPoly.size() >= 1 && contourPoly.size() <= 10)
+		if(contours.size() >= 1 && contours.size() <= 10)
 		{
 			track_state = TRACKING;
 			cvtColor(frame, hsv, COLOR_BGR2HSV);
@@ -794,11 +328,10 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 			hists.clear();
 			trackWindows.clear();
 
-			for (int i = 0; i < contourPoly.size(); ++i)
+			for (int i = 0; i < contours.size(); ++i)
 			{
-				Rect selection = boundingRect(contourPoly[i]); 
+				Rect selection = boundingRect(contours[i]); 
 
-				//Rect selection = maxRect();
 				cvtColor(frame, hsv, COLOR_BGR2HSV);
 
 
@@ -824,11 +357,14 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
                 calcHist(&roi, 1, 0, maskroi, hist, 1, &hsize, &phranges);
                 
                 normalize(hist, hist, 0, 255, NORM_MINMAX);
+
                 trackWindow = selection;
 
-                hists.push_back(hist);
+                hists.push_back(hist.clone());
+
                 trackWindows.push_back(trackWindow);
 
+                cout << "window: " << trackWindows[i] << endl;
 			}
 		
 
@@ -836,7 +372,6 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	}else if(track_state == TRACKING)
 	{
 	 	
-	 	// cout << "tracking: " << hists.size() << " robots" << endl; 
 	 	
  	 	cvtColor(frame, hsv, COLOR_BGR2HSV);	
         
@@ -845,124 +380,48 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         mixChannels(&hsv, 1, &hue, 1, ch, 1);
 
         int success_track_cnt = 0;
-        contours.clear();
+        robot_rects.clear();
 
-
+     
         for (int i = 0; i < hists.size(); ++i)
         {
         	hists[i].copyTo(hist);
-
-
         	trackWindow = trackWindows[i]; 
-
-        	//infomation from the past frame,  1 hist, 2, trackWindow
+    
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
-	        //backproj &= mask;
-	       
+	        
 	        RotatedRect trackBox = CamShift(backproj, trackWindow,
 	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
 	        
-
 	        if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD && trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
 	        {
-	        	//track_state = DETECTING;
+	        	
 	        	success_track_cnt++;
-	        	//ellipse( frame, trackBox, Scalar(0, 0, 255), 3, 8);
-        		//drawrect(frame, trackBox, Scalar(0, 0, 255));
-
         		trackWindows[i] = trackWindow;
-
-		        rect_to_contour(trackBox, contour);
-		        //cout << "contour: " << contour << endl;
-		        contours.push_back(contour);
-		        
+        		robot_rects.push_back(trackBox);
 	        }
 	        
         }
 
-        double track_rate = (double)success_track_cnt/hists.size();
-        //if(track_rate < 0.5)
+
         if(success_track_cnt <= 0)
-        {
+        {	
         	track_state = DETECTING;
         }
        
 	}
 	
 
-	//std::vector<Point2f> mass_centers, shape_centers;
-	//std::vector<Point2f> mass_centers = mass_center(contours, color_mask);
-	std::vector<Point2f> shape_centers = shape_center(contours);
-
-	//robot_center(contours, color_mask, shape_centers, mass_centers);
-	//std::vector<Point2f> dir_centers = robot_direction(contours, mass_centers, shape_centers);
-	
+	std::vector<Point2f> shape_centers = shape_center(robot_rects);
 	robotPose = normalized_robot_pose(shape_centers);
-	
-	//imshow("frame", frame);
-	//waitKey(20);
-
-	for (unsigned int i = 0; i < contours.size(); i++)
+	for (unsigned int i = 0; i < robot_rects.size(); i++)
 	{
-		
-		Scalar color = ColorTable[i%COLOR_CNT];//Scalar(rand() & 255, rand()& 255, rand() & 255);
-		drawContours(frame, contours, i, color, 2, 8);
-		
-		circle(frame, shape_centers[i], 2.0, color, 2, 8);
-		//circle(frame, dir_centers[i], 2.0, color, 2, 8);
+		Scalar color = ColorTable[i%COLOR_CNT];
+		drawrect(frame, robot_rects[i], color);
 	}
+	
 	return robotPose;
 }
-
-
-/*
-std::vector<Eigen::Vector3d> robotTrack(Mat& frame)
-{
-	
-	int64_t start = get_timestamp();   
-	static int frame_cnt = 0;
-    static int detect_cnt = 0;
-    double diff = 0.0;
-	
-    vector< vector<Point> > contourPoly, contourPoly_prev;
-    vector<RobotFeature>  robot_features, robot_features_prev;
-    
-    static vector<RobotFeature>  all_robot;//all the robots
-    static vector< vector<Point> > all_contourPoly;
-    static vector< queue<int> > observe_cnt;
-    
-    vector<std::pair<int, int> > matches;
-	char label[3];
-	
-	std::vector<Eigen::Vector3d> robotPosition;
-	if(frame.empty() ) 
-	{
-		return robotPosition;
-	}
-	
-	
-	
-	remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT );
-	contourPoly = robotDetect(frame);	
-	calc_features(frame, contourPoly, robot_features);
-	robotMatch(all_robot, robot_features, matches);
-	update_robot_list(all_robot, all_contourPoly, observe_cnt, robot_features, contourPoly, matches);
-	
-	robotPosition = robotCenter(all_contourPoly);
-	
-	
-	frame_cnt++;
-	detect_cnt += contourPoly.size();
-	
-	double detect_rate = (double)detect_cnt/frame_cnt; //average robot in one frame
-    //printf("\ndetect rate: %f", detect_rate);
-	
-	int64_t current = get_timestamp();   
-	double cost_time = (current - start)/1000000.0;
-	//cout << "cost time: " << cost_time << endl;  
-	return robotPosition;
-}
-*/
 
 //
 std::vector<Eigen::VectorXd> robot_pos_dir(vector< Point2f >& shape_centers, std::vector<Point2f>& robot_directions)
@@ -997,46 +456,7 @@ std::vector<Eigen::VectorXd> robot_pos_dir(vector< Point2f >& shape_centers, std
 	return normlizedCenter;
 }
 
-//normlized position
-std::vector<Eigen::VectorXd> robotCenter(vector< RobotFeature > & features, std::vector<int>& eff_ids)
-{
-	
-	float radius = 0.0;
-	std::vector<Eigen::VectorXd> normlizedCenter;
-	cv::Mat src = Mat::zeros(1, 2, CV_32FC2);
-	cv::Mat m = Mat::zeros(3, 1, CV_64FC1);
-	std::vector<Point2f> p2;
-	
-	
-	for(int i = 0; i < features.size(); i++)
-	{
-		 if(!eff_ids[i])
-		 {
-		 	continue;
-		 }
 
-		 Eigen::VectorXd cc(6);
-		 m.at<double>(0) = features[i].shape_center.x;
-		 m.at<double>(1) = features[i].shape_center.y;
-		 m.at<double>(2) = 1.0;
-		 m = K.inv()*m;
-		 cc(0) = m.at<double>(0);
-		 cc(1) = m.at<double>(1);
-		 cc(2) = m.at<double>(2);
-		 
-		 //direction:
-		 m.at<double>(0) = features[i].dir_center.x;
-		 m.at<double>(1) = features[i].dir_center.y;
-		 m.at<double>(2) = 1.0;
-		 m = K.inv()*m;
-		 cc(3) = m.at<double>(0);
-		 cc(4) = m.at<double>(1);
-		 cc(5) = m.at<double>(2);
-		 
-	 	normlizedCenter.push_back(cc);
-	}
-	return normlizedCenter;
-}
 
 
 //normlized position
@@ -1045,6 +465,7 @@ std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_ce
 	
 	float radius = 0.0;
 	std::vector<Eigen::Vector3d> normlizedCenter;
+
 	cv::Mat src = Mat::zeros(1, 2, CV_32FC2);
 	cv::Mat m = Mat::zeros(3, 1, CV_64FC1);
 	std::vector<Point2f> p2;
@@ -1060,14 +481,6 @@ std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_ce
 		 cc(1) = m.at<double>(1);
 		 cc(2) = m.at<double>(2);
 
-		 //direction:
-		 // m.at<double>(0) = dir_centers[i].x;
-		 // m.at<double>(1) = dir_centers[i].y;
-		 // m.at<double>(2) = 1.0;
-		 // m = K.inv()*m;
-		 // cc(3) = m.at<double>(0);
-		 // cc(4) = m.at<double>(1);
-		 // cc(5) = m.at<double>(2);
 	 	 normlizedCenter.push_back(cc);
 	}
 	return normlizedCenter;
@@ -1147,6 +560,8 @@ int svmInit(char*  filename1, char* filename2)
 	cout << "initialization OK" << endl;
 }
 
+
+
 void robotSegment(Mat& frame, Mat& mask)
 {
 	unsigned char* p = NULL;
@@ -1175,135 +590,27 @@ void robotSegment(Mat& frame, Mat& mask)
 }
 
 
-  //estimate direction of the robot
-//use the mass center 
 
-vector<Point2f> mass_center(std::vector< std::vector<Point> > contours, Mat& color_mask)
-{
-	cv::Mat mask = cv::Mat::zeros(color_mask.rows, color_mask.cols, CV_8UC1);
-	vector<Point> contour;
-	std::vector<Point2f> robotCenter;
+// vector<Point2f> shape_center(std::vector< std::vector<Point> >& contours)
+// {
 	
-	for(int i = 0; i < contours.size(); i++)
-	{
-		mask.setTo(Scalar(0));
-		
-		//cout << "contours[i]:" << contours[i] << endl;
+// 	Point2f center;
+// 	float radius = 0.0;
+// 	std::vector<Point2f> centers;   
+// 	for(int i = 0; i < contours.size(); i++)
+// 	{
+// 		minEnclosingCircle( contours[i], center, radius);
+// 		centers.push_back(center);
+// 	}
+// 	return centers;
+// } 
 
-		drawContours(mask, contours, i, Scalar(1), CV_FILLED);	
-		
-		mask &= color_mask;
-
-		float sum_x = 0.0f;
-		float sum_y = 0.0f;
-
-		int count = 0;
-		unsigned int r = 0, g = 0, b = 0;
-		for (unsigned int j = 0; j < mask.rows; j++)
-		{
-			for (unsigned int k = 0; k < mask.cols; k++)
-			{
-				if(mask.at<unsigned char>(j, k))
-				{
-					sum_x += k;
-					sum_y += j;
-					count++;
-				}				
-			}
-		}	
-		Point2f center = Point2f(sum_x/count, sum_y/count);		
-		robotCenter.push_back(center);
-	}
-	return robotCenter;
-}
-
-
-void robot_center(std::vector< std::vector<Point> > contours, 
-				Mat& color_mask, 
-				vector<Point2f>& mass_centers, 
-				vector<Point2f>& shape_centers
-				//vector<Point2f>& dir_centers,
-				)
+vector<Point2f> shape_center(std::vector< RotatedRect >& rects)
 {
-	cv::Mat mask = cv::Mat::zeros(color_mask.rows, color_mask.cols, CV_8UC1);
-	vector<Point> contour;
-
-	mass_centers.clear();
-	shape_centers.clear();
-	//dir_centers.clear();
-
-	
-	for(int i = 0; i < contours.size(); i++)
-	{
-		mask.setTo(Scalar(0));
-		
-		//cout << "contours[i]:" << contours[i] << endl;
-
-		drawContours(mask, contours, i, Scalar(1), CV_FILLED);	
-		
-		mask &= color_mask;
-
-		float sum_x = 0.0f;
-		float sum_y = 0.0f;
-
-		int count = 0;
-		unsigned int r = 0, g = 0, b = 0;
-		for (unsigned int j = 0; j < mask.rows; j++)
-		{
-			for (unsigned int k = 0; k < mask.cols; k++)
-			{
-				if(mask.at<unsigned char>(j, k))
-				{
-					sum_x += k;
-					sum_y += j;
-					count++;
-				}				
-			}
-		}	
-		Point2f center = Point2f(sum_x/count, sum_y/count);		
-		mass_centers.push_back(center);
-
-
-		sum_x = 0.0f;
-		sum_y = 0.0f;
-		count = 0;
-		double dx, dy;
-		r = 0, g = 0, b = 0;
-		for (unsigned int j = 0; j < mask.rows; j++)
-		{
-			for (unsigned int k = 0; k < mask.cols; k++)
-			{
-				if(mask.at<unsigned char>(j, k))
-				{
-					dx = (k - center.x);
-					dy = (j - center.y);
-					sum_x += dx*dx*dx;
-					sum_y += dy*dy*dy;
-					count++;
-				}				
-			}
-		}	
-		double mean_x3 = pow(sum_x/count, 1.0/3.0);
-		double mean_y3 = pow(sum_y/count, 1.0/3.0);
-
-		shape_centers.push_back(Point2f(center.x + mean_x3, center.y + mean_y3) );
-	}
-
-
-}
-
-
-vector<Point2f> shape_center(std::vector< std::vector<Point> >& contours)
-{
-	
-	Point2f center;
-	float radius = 0.0;
 	std::vector<Point2f> centers;   
-	for(int i = 0; i < contours.size(); i++)
+	for(int i = 0; i < rects.size(); i++)
 	{
-		minEnclosingCircle( contours[i], center, radius);
-		centers.push_back(center);
-		centers.push_back(center);
+		centers.push_back(rects[i].center);
 	}
 	return centers;
 } 
