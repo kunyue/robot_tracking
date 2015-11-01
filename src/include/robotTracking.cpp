@@ -24,8 +24,8 @@ using Eigen::Vector3d;
 
 #define EFF_AREA_MIN_THRESHOLD 120.0
 #define EFF_AREA_MAX_THRESHOLD 5000.0
-#define MIN_AXIS_RATIO 1.2
-#define MAX_AXIS_RATIO 3.0
+#define MIN_AXIS_RATIO 1.05
+#define MAX_AXIS_RATIO 4.0
 #define OUTLIER_THRESHOLD 800.0
 
 #define EFF_ROBOT_THRESHOLD 5
@@ -73,6 +73,7 @@ bool effitive_box(Rect rect)
 	double area = rect.area();
 	if(area < EFF_AREA_MIN_THRESHOLD || area > EFF_AREA_MAX_THRESHOLD)
 	{
+		cout << "area: " << area << endl;
 		return false;
 	}
 
@@ -87,6 +88,7 @@ bool effitive_box(Rect rect)
 
 	if(ratio < MIN_AXIS_RATIO || ratio > MAX_AXIS_RATIO)
 	{
+		cout << "ratio: " << ratio << endl;
 		return false;
 	}
 	return true;
@@ -371,11 +373,11 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 
 			for (int i = 0; i < detect_rects.size(); ++i)
 			{
-				RotatedRect scaledRoatatedRect = resize_rect( detect_rects[i], 0.3);
+				RotatedRect scaledRoatatedRect = resize_rect( detect_rects[i], 0.8);
 				//remove robots in corner
 				{
 					Point2f center = detect_rects[i].center;
-					double corner_threshold = 40.0;
+					double corner_threshold = 30.0;
 					if( (center.x < corner_threshold) 
 						//|| (center.x < corner_threshold && (center.y > 480 - corner_threshold) ) 
 						|| (center.x > (640 - corner_threshold)) )
@@ -404,9 +406,9 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 				            	
                 int _vmin = 30; 
                 int _vmax = 255;
-                int smin = 30;
+                int smin = 50;
 
-                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(180, 256, MAX(_vmin, _vmax)), mask);
+                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(150, 256, MAX(_vmin, _vmax)), mask);
 
                 int ch[] = {0, 0};
                 hue.create(hsv.size(), hsv.depth());
@@ -461,6 +463,8 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
     		//imshow("white_mask", white_mask);
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 	        backproj &= white_mask;
+
+
 	        //backproj.dot(color_mask); //TODO 
 	        //backproj &= color_mask;
 		 	//backproj = color_mask;
@@ -470,7 +474,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	        //waitKey(10);
 
 	        RotatedRect trackBox = CamShift(backproj, trackWindow,
-	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
+	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1.0 ));
 	        //cout << "tracking: " << trackWindow << endl;
 
 
@@ -490,6 +494,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         if(success_track_cnt <= 0)
         {	
         	untracked_cnt++;
+        	cout << "robot lost:" << endl;
         	if(untracked_cnt >= 5)
         	{
         		track_state = DETECTING;
@@ -710,14 +715,15 @@ void robotSegment(Mat& frame, Mat& mask)
 	for (unsigned int i = 0; i < frame.rows; i++)
 	{
 		
-		p = (unsigned char*)(frame.data + i*frame.step);
+		//p = (unsigned char*)(frame.data + i*frame.step);
+
 		for (unsigned int j = 0; j < frame.cols; j++)
 		{
-			
+			Vec3b p = frame.at<Vec3b>(i, j);
 			id1 = p[0]/table_scale;
 			id2 = p[1]/table_scale;
 			id3 = p[2]/table_scale;
-			p += 3;
+			//p += 3;
 			//cout << "id: " << id1 << " " << id2 << "  " << id3 << endl;
 			mask.at<unsigned char>(i, j) = colorMap[id1][id2][id3];
 		}
