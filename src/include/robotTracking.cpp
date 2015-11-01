@@ -458,7 +458,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
     		
 
     		whiteMask(frame, white_mask);
-    		imshow("white_mask", white_mask);
+    		//imshow("white_mask", white_mask);
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 	        backproj &= white_mask;
 	        //backproj.dot(color_mask); //TODO 
