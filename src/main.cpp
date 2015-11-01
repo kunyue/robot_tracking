@@ -20,6 +20,7 @@ ros::Time tImage;
 cv::Mat image, frame, dst;
 bool image_ready = false;
 deque<pair<double,cv::Mat> > image_q;
+
 void image_callback(const sensor_msgs::Image::ConstPtr &msg)
 {
     image_ready = true;
@@ -123,12 +124,11 @@ int main(int argc, char **argv)
     //normalized position
     while (n.ok())
     {
-        if (image_ready)
+        loop.sleep();
+        ros::spinOnce();
+        if (image_q.size())
         {
-            image_ready = false;
-            //vw << image;
-
-
+            // vw << image;
             if (odom_set.size() == 0)
                 continue;
 
@@ -203,7 +203,8 @@ int main(int argc, char **argv)
                 }
                 else
                     ROS_INFO("accumulating pose");
-            }else
+            }
+            else
             {
                 ROS_INFO("robot lost");
                 robot_p_q.clear();
@@ -224,7 +225,7 @@ int main(int argc, char **argv)
 
             if (image_view)
             {
-                if (true)
+                if (false)
                 {
                     imshow("frame", image);
                     char key = waitKey(30);

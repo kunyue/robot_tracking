@@ -318,7 +318,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 
     const float* phranges = hranges;
 
-    Mat hsv, hue, mask, color_mask;
+    Mat hsv, hue, mask, color_mask, white_mask;
 
     Mat hist, backproj;
 
@@ -334,6 +334,8 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 
 	static int frame_cnt = 0;
     static int detect_cnt = 0;
+
+
 
 	std::vector<Eigen::Vector3d> robotPose;//output
 
@@ -453,9 +455,12 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         {
         	hists[i].copyTo(hist);
         	trackWindow = trackWindows[i]; 
-    
+    		
+
+    		whiteMask(frame, white_mask);
+    		imshow("white_mask", white_mask);
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
-	        
+	        backproj &= white_mask;
 	        //backproj.dot(color_mask); //TODO 
 	        //backproj &= color_mask;
 		 	//backproj = color_mask;
@@ -827,3 +832,26 @@ int readCetaCamera(const std::string& filename)
  	return normlized_points;
 
  }
+
+void whiteMask(Mat& frame, Mat& mask)
+{
+	if(mask.cols != frame.cols || mask.rows != frame.rows)
+	{
+		mask = Mat::zeros(frame.rows, frame.cols, CV_8UC1);
+	}
+
+	for (int i = 0; i < frame.rows; ++i)
+	{
+		for(int j = 0; j < frame.cols; j++)
+		{
+			Vec3b bgr = frame.at<Vec3b>(i, j);
+			if(bgr[0]  > 100 && bgr[1] > 100 && bgr[2] > 100)
+			{
+				mask.at<unsigned char>(i, j) = 0;
+			}else 
+			{
+				mask.at<unsigned char>(i, j) = 255;
+			}
+		}
+	}
+}
