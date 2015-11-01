@@ -114,7 +114,9 @@ int main(int argc, char **argv)
     {
         vis_pub = it.advertise("vis_img", 1);
     }
-    
+
+    //VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 30, Size(640, 480));
+
     init_rotation();
     ros::Rate loop(600);
     //normalized position
@@ -124,8 +126,7 @@ int main(int argc, char **argv)
         ros::spinOnce();
         if (image_q.size())
         {
-            // image_ready = false;
-            
+            // vw << image;
             if (odom_set.size() == 0)
                 continue;
 
@@ -200,7 +201,8 @@ int main(int argc, char **argv)
                 }
                 else
                     ROS_INFO("accumulating pose");
-            }else
+            }
+            else
             {
                 ROS_INFO("robot lost");
                 robot_p_q.clear();
