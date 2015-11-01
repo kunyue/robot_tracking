@@ -541,7 +541,7 @@ int svmInit(char*  filename1, char* filename2)
 				tmp32 = tmp22 + sv_red.at<double>(2)*k + sv_red.at<double>(5)*k*k;
 				
 				//TODO, I don't understant
-				if(tmp31 < 0.0 || tmp32 < 0.0)
+				if(tmp31 < 0.0/* || tmp32 < 0.0*/)
 				{
 					colorMap[i/table_scale][j/table_scale][k/table_scale] = 255;
 				}else 

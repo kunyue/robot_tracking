@@ -44,7 +44,8 @@ int main(int argc, char** argv)
 	}
 	
 	std::vector<Eigen::Vector3d> robotPosition;//normalized position
-	Mat frame;
+	Mat frame, hsv;
+	std::vector<Mat> _hsv, bgr;
     VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
     //VideoCapture cap("/home/libing/grid-irobot_2015-10-20-23-10-52.avi"); 
    
@@ -59,8 +60,13 @@ int main(int argc, char** argv)
     {
 		cap >> frame;
 		if(frame.empty()) break;
+
+		cvtColor(frame, hsv, CV_BGR2HSV);
+		split(hsv, _hsv);
+		split(frame, bgr);
+
 		cnt++;
-		if(cnt < 200) continue;
+		if(cnt < 100) continue;
 		//2. track
 		//robotPosition = robotTrack(frame);
 		robotPosition = camshiftTrack(frame);
@@ -71,6 +77,14 @@ int main(int argc, char** argv)
 		}
 		
 		imshow("frame", frame);
+		// imshow("hsv", hsv);
+		// imshow("h", _hsv[0]/360.0);
+		// imshow("s", _hsv[1]);
+		// imshow("v", _hsv[2]);
+		// imshow("B", bgr[0]);
+		// imshow("G", bgr[1]);
+		// imshow("R", bgr[2]);
+
 		char key = waitKey(30);
 		if(key == 27)
 		{
