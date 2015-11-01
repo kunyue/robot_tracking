@@ -73,7 +73,7 @@ bool effitive_box(Rect rect)
 	double area = rect.area();
 	if(area < EFF_AREA_MIN_THRESHOLD || area > EFF_AREA_MAX_THRESHOLD)
 	{
-		cout << "area: " << area << endl;
+		//cout << "area: " << area << endl;
 		return false;
 	}
 
@@ -88,7 +88,7 @@ bool effitive_box(Rect rect)
 
 	if(ratio < MIN_AXIS_RATIO || ratio > MAX_AXIS_RATIO)
 	{
-		cout << "ratio: " << ratio << endl;
+		//cout << "ratio: " << ratio << endl;
 		return false;
 	}
 	return true;
@@ -494,7 +494,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         if(success_track_cnt <= 0)
         {	
         	untracked_cnt++;
-        	cout << "robot lost:" << endl;
+        	//cout << "robot lost:" << endl;
         	if(untracked_cnt >= 5)
         	{
         		track_state = DETECTING;
