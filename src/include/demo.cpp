@@ -46,8 +46,8 @@ int main(int argc, char** argv)
 	std::vector<Eigen::Vector3d> robotPosition;//normalized position
 	Mat frame, hsv;
 	std::vector<Mat> _hsv, bgr;
-    VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
-    //VideoCapture cap("/home/libing/grid-irobot_2015-10-20-23-10-52.avi"); 
+    //VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
+    VideoCapture cap("/home/libing/vw.avi"); 
    
    
     if ( !cap.isOpened()  )  // if not success, exit program
@@ -92,6 +92,11 @@ int main(int argc, char** argv)
 		}else if(key == ' ')
 		{
 			waitKey(0);
+		}else if(key == 's')
+		{
+			char buf[1024];
+			sprintf(buf, "img_%d.bmp", cnt);
+			imwrite(buf, frame);
 		}
 		
 	}

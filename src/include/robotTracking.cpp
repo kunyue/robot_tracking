@@ -22,8 +22,10 @@ using Eigen::Vector3d;
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
 //#define EDGE_BASED 0//1 edge based; color based method 
 
-#define EFF_AREA_MIN_THRESHOLD 200.0
+#define EFF_AREA_MIN_THRESHOLD 120.0
 #define EFF_AREA_MAX_THRESHOLD 5000.0
+#define MIN_AXIS_RATIO 1.2
+#define MAX_AXIS_RATIO 3.0
 #define OUTLIER_THRESHOLD 800.0
 
 #define EFF_ROBOT_THRESHOLD 5
@@ -47,9 +49,12 @@ enum
 
 
 
-vector< vector<Point> > findBox(Mat& bwImg);
+//vector< vector<Point> > findBox(Mat& bwImg);
+vector< RotatedRect > findBox(Mat& bwImg);
+
 vector<Point2f> shape_center(std::vector< RotatedRect >& contours);
 std::vector<Eigen::VectorXd> robot_pos_dir(vector< Point2f >& shape_centers, std::vector<Point2f>& robot_directions);
+bool effitive_box(Rect rect);
 
 cv::Mat K, distCoeff;
 int image_width, image_height;
@@ -62,13 +67,42 @@ unsigned char colorMap[256/table_scale][256/table_scale][256/table_scale];
 //calibration parameter for cetacamera
 double m_xi, m_k1, m_k2, m_p1, m_p2, m_gamma1, m_gamma2, m_u0, m_v0; 
 
+bool effitive_box(Rect rect)
+{
+	
+	double area = rect.area();
+	if(area < EFF_AREA_MIN_THRESHOLD || area > EFF_AREA_MAX_THRESHOLD)
+	{
+		return false;
+	}
 
-vector< vector<Point> > findBox(Mat& bwImg)
+
+
+	Point2f vertices[4];
+	double len1 = rect.width;
+	double len2 = rect.height;
+	double long_axis = max(len1, len2);
+	double short_axis = min(len1, len2);
+	double ratio = long_axis/short_axis;
+
+	if(ratio < MIN_AXIS_RATIO || ratio > MAX_AXIS_RATIO)
+	{
+		return false;
+	}
+	return true;
+}
+
+
+vector< RotatedRect > findBox(Mat& bwImg)
 {
 	vector< vector<Point> > contours, contoursPoly;
 	vector<Vec4i>hierarchy;
 	int64_t start = 0, end = 0; 
 	findContours(bwImg, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+
+	vector< RotatedRect > rects;
+
 
 	for(int i = 0; i < contours.size(); i++)
 	{
@@ -77,6 +111,7 @@ vector< vector<Point> > findBox(Mat& bwImg)
 		if(area > EFF_AREA_MIN_THRESHOLD && area < EFF_AREA_MAX_THRESHOLD)
 		{
 			
+			//cout << "area: " << area << endl;
 			RotatedRect rect = minAreaRect( Mat(contours[i]) );
 			
 			Point2f vertices[4];
@@ -94,18 +129,21 @@ vector< vector<Point> > findBox(Mat& bwImg)
 			{
 				continue;
 			}
+
 			//cout << "ratio: " << ratio << " area_ratio: " << area_ratio << endl;
-			vector<Point> contour;
-			for (int j = 0; j < 4; j++)
-			{
-				contour.push_back(vertices[j]);
-			}
+			// vector<Point> contour;
+			// for (int j = 0; j < 4; j++)
+			// {
+			// 	contour.push_back(vertices[j]);
+			// }
 			//contour = alignShape(contour);
-			contoursPoly.push_back(contour);
+			//contoursPoly.push_back(contour);
+			rects.push_back(rect);
 		}
 	}
 
-	return contoursPoly;
+	//return contoursPoly;
+	return rects;
 }
 
 
@@ -229,6 +267,8 @@ int robotTrackInit(char* calib_filename, char* green_svm_filename, char* red_svm
 {
 
 	int ret1 =  svmInit(green_svm_filename, red_svm_filename);
+	//int ret1 = 0;
+	//colorTableInit(); //TODO
 	//int ret2 = calibInit(calib_filename);
 	int ret2 = readCetaCamera(calib_filename);
 
@@ -264,19 +304,6 @@ int calibInit(char* calib_filename)
 }
 
 
-
-
-
-bool backprojMode = false;
-bool selectObject = false;
-int trackObject = 0;
-bool showHist = true;
-Point origin;
-Rect selection;
-int vmin = 10, vmax = 256, smin = 0;
-
-
-
 //use camshift to track the robot
 std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 {
@@ -287,7 +314,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
     
     int hsize = 16;
 
-    float hranges[] = {0, 180};
+    float hranges[] = {0, 180};//TODO 
 
     const float* phranges = hranges;
 
@@ -301,7 +328,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
     static vector<Rect> trackWindows;
 
     vector<RotatedRect> robot_rects;
-
+   
     std::vector<Point> contour;
 	std::vector< vector<Point> > contours;
 
@@ -315,27 +342,55 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 		return robotPose;
 	}
 	
+
+	static int untracked_cnt = 0;
 	//remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	
+
 	if(track_state == DETECTING)
 	{
 		
 		robotSegment(frame, color_mask);//mask for red and green region 
-		contours = findBox(color_mask);//find contours will destory the image 
 
-		if(contours.size() >= 1 && contours.size() <= 10)
+		std::vector<RotatedRect> detect_rects = findBox(color_mask);//find contours will destory the image 
+
+		if(detect_rects.size() >= 1 && detect_rects.size() <= 10)
 		{
-			track_state = TRACKING;
+			
 			cvtColor(frame, hsv, COLOR_BGR2HSV);
 
 			//initialize for tracking
 			hists.clear();
 			trackWindows.clear();
 
-			for (int i = 0; i < contours.size(); ++i)
-			{
-				Rect selection = boundingRect(contours[i]); 
+			int eff_detect = 0;
 
+			//cout << "detect: " << detect_rects.size() << endl;
+
+			for (int i = 0; i < detect_rects.size(); ++i)
+			{
+				RotatedRect scaledRoatatedRect = resize_rect( detect_rects[i], 0.3);
+				//remove robots in corner
+				{
+					Point2f center = detect_rects[i].center;
+					double corner_threshold = 40.0;
+					if( (center.x < corner_threshold) 
+						//|| (center.x < corner_threshold && (center.y > 480 - corner_threshold) ) 
+						|| (center.x > (640 - corner_threshold)) )
+					{
+						//cout << "corner removed" << endl;
+						continue;
+					}
+
+				}
+
+				eff_detect++;	
+				rect_to_contour(scaledRoatatedRect, contour);
+				Rect selection = boundingRect(contour);
+
+				//cout << "selection : " << selection << endl;
+				Scalar color = ColorTable[1];
+				rectangle(frame, selection, color, 1, 8);
 				cvtColor(frame, hsv, COLOR_BGR2HSV);
 
 
@@ -345,10 +400,11 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 				if(selection.y + selection.height > frame.rows) selection.height = frame.rows - selection.y - 1;   
 
 				            	
-                int _vmin = 0; 
+                int _vmin = 30; 
                 int _vmax = 255;
+                int smin = 30;
 
-                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(0, 256, MAX(_vmin, _vmax)), mask);
+                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(180, 256, MAX(_vmin, _vmax)), mask);
 
                 int ch[] = {0, 0};
                 hue.create(hsv.size(), hsv.depth());
@@ -365,10 +421,16 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
                 trackWindow = selection;
 
                 hists.push_back(hist.clone());
-
                 trackWindows.push_back(trackWindow);
 
-                cout << "window: " << trackWindows[i] << endl;
+			}
+
+
+
+			if(eff_detect >= 1 && eff_detect < 10)
+			{
+				track_state = TRACKING; //TODO 
+				untracked_cnt = 0;
 			}
 		
 
@@ -386,7 +448,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         int success_track_cnt = 0;
         robot_rects.clear();
 
-     
+     	//cout << "tracking: " << hists.size() << endl;
         for (int i = 0; i < hists.size(); ++i)
         {
         	hists[i].copyTo(hist);
@@ -394,12 +456,24 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
     
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 	        
+	        //backproj.dot(color_mask); //TODO 
+	        //backproj &= color_mask;
+		 	//backproj = color_mask;
+	        //cout << "backproj: " << backproj.row(1) << endl;
+
+	        //imshow("backproj", backproj);
+	        //waitKey(10);
+
 	        RotatedRect trackBox = CamShift(backproj, trackWindow,
 	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
-	        
-	        if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD && trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
+	        //cout << "tracking: " << trackWindow << endl;
+
+
+	       // if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD 
+	        //	&& trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
+	        if(effitive_box(trackWindow))
 	        {
-	        	
+
 	        	success_track_cnt++;
         		trackWindows[i] = trackWindow;
         		robot_rects.push_back(trackBox);
@@ -407,10 +481,15 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	        
         }
 
-
+        //cout << "tracked: " << success_track_cnt << endl;
         if(success_track_cnt <= 0)
         {	
-        	track_state = DETECTING;
+        	untracked_cnt++;
+        	if(untracked_cnt >= 5)
+        	{
+        		track_state = DETECTING;
+        	}
+        	
         }
        
 	}
@@ -541,7 +620,7 @@ int svmInit(char*  filename1, char* filename2)
 				tmp32 = tmp22 + sv_red.at<double>(2)*k + sv_red.at<double>(5)*k*k;
 				
 				//TODO, I don't understant
-				if(tmp31 < 0.0/* || tmp32 < 0.0*/)
+				if(tmp31 < 0.0 || tmp32 < 0.0)
 				{
 					colorMap[i/table_scale][j/table_scale][k/table_scale] = 255;
 				}else 
@@ -567,6 +646,49 @@ int svmInit(char*  filename1, char* filename2)
 	} 
 	cout << "initialization OK" << endl;
 }
+
+
+void colorTableInit()
+{
+	bool is_red = false, is_green = false;
+	for (unsigned int b = 0; b < 256; b += table_scale)
+	{		
+
+		for (unsigned int g = 0; g < 256; g += table_scale)
+		{
+					
+			for (unsigned int r = 0; r < 256; r += table_scale)
+			{
+				if(b < 100 && g < 100 && r > 70) 
+				{
+					is_red = true;
+				}else
+				{
+					is_red = false;
+				}
+
+				if( (b > 30 && b < 80) && (g > 40 && g < 100) && (r > 10 && r < 50) )
+				{
+					is_green = true;
+				}else 
+				{
+					is_green = false;
+				}
+
+				if(is_red || is_green)
+				{
+					colorMap[b/table_scale][g/table_scale][r/table_scale] = 255;
+				}else 
+				{
+					colorMap[b/table_scale][g/table_scale][r/table_scale] = 0;
+				}
+
+			}
+		}
+	} 
+}
+
+
 
 
 
@@ -628,12 +750,12 @@ vector<Point2f> shape_center(std::vector< RotatedRect >& rects)
 int readCetaCamera(const std::string& filename)
 {
     cv::FileStorage fs(filename, cv::FileStorage::READ);
- 	cout << __FILE__ << " " << __LINE__ << endl;
+ 	
     if (!fs.isOpened())
     {
         return -1;
     }
-    cout << __FILE__ << " " << __LINE__ << endl;
+    
     if (!fs["model_type"].isNone())
     {
         std::string sModelType;
@@ -644,12 +766,12 @@ int readCetaCamera(const std::string& filename)
             return -1;
         }
     }
-    cout << __FILE__ << " " << __LINE__ << endl;
+    
     string m_cameraName;
     fs["camera_name"] >> m_cameraName;
     image_width = static_cast<int>(fs["image_width"]);
     image_height = static_cast<int>(fs["image_height"]);
-    cout << __FILE__ << " " << __LINE__ << endl;
+    
     cv::FileNode n = fs["mirror_parameters"];
     m_xi = static_cast<double>(n["xi"]);
 
@@ -658,15 +780,15 @@ int readCetaCamera(const std::string& filename)
     m_k2 = static_cast<double>(n["k2"]);
     m_p1 = static_cast<double>(n["p1"]);
     m_p2 = static_cast<double>(n["p2"]);
-    cout << __FILE__ << " " << __LINE__ << endl;
+    
     n = fs["projection_parameters"];
     m_gamma1 = static_cast<double>(n["gamma1"]);
     m_gamma2 = static_cast<double>(n["gamma2"]);
     m_u0 = static_cast<double>(n["u0"]);
     m_v0 = static_cast<double>(n["v0"]);
 
-    cout << "m_xi: " << m_xi << "m_k1: " << m_k1 << " m_k2:" << m_k2 << "  m_gamma1: " << m_gamma1
-    	<< " m_gamma2: " << m_gamma2 << endl;
+    //cout << "m_xi: " << m_xi << "m_k1: " << m_k1 << " m_k2:" << m_k2 << "  m_gamma1: " << m_gamma1
+    //	<< " m_gamma2: " << m_gamma2 << endl;
 
     return 0;
 }
@@ -682,10 +804,9 @@ int readCetaCamera(const std::string& filename)
 
     const double fScale = 1.0;//TODO 
 
-    cout << "m_xi: " << m_xi << "  m_gamma1: " << m_gamma1 << endl;
  	for (int i = 0; i < points.size(); ++i)
  	{
-		cout << "point: " << points[i] << endl;
+		//cout << "point: " << points[i] << endl;
 		double u = points[i].x;
 		double v = points[i].y;
 
@@ -698,11 +819,9 @@ int readCetaCamera(const std::string& filename)
 		Eigen::Vector3d P;
 		P << mx_u, my_u, 1.0 - xi * (d2 + 1.0) / (xi + sqrt(1.0 + (1.0 - xi * xi) * d2));
 
-		P /= P(2);
-		cout << "normalized: " << P << endl;
+		P /= P(2);		
 		normlized_points.push_back(P);
-		//Eigen::Vector2d p;
-		//spaceToPlane(P, p);
+
  	}
 
  	return normlized_points;

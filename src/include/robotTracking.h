@@ -31,6 +31,8 @@ std::vector<Eigen::Vector3d> normalized_robot_pose(std::vector<Point2f> shape_ce
 int readCetaCamera(const std::string& filename);
 
  vector<Eigen::Vector3d> cetaUndistPoint(std::vector<Point2f>& points);
+ 
+ void colorTableInit();
 
 
 
