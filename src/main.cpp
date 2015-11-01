@@ -18,11 +18,10 @@ using namespace Eigen;
 
 ros::Time tImage;
 cv::Mat image, frame, dst;
-bool image_ready = false;
 deque<pair<double,cv::Mat> > image_q;
+
 void image_callback(const sensor_msgs::Image::ConstPtr &msg)
 {
-    image_ready = true;
     tImage = msg->header.stamp;
     image  = cv_bridge::toCvCopy(msg, string("bgr8"))->image;
     image_q.push_back(make_pair(msg->header.stamp.toSec(), image));
@@ -73,6 +72,7 @@ Vector3d get_robot_position(Vector3d position)
     return POS_W;
 }
 
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "ball_track");
@@ -114,15 +114,17 @@ int main(int argc, char **argv)
     {
         vis_pub = it.advertise("vis_img", 1);
     }
-	
+    
     init_rotation();
     ros::Rate loop(600);
     //normalized position
     while (n.ok())
     {
-        if (image_ready)
+        loop.sleep();
+        ros::spinOnce();
+        if (image_q.size())
         {
-            image_ready = false;
+            // image_ready = false;
             
             if (odom_set.size() == 0)
                 continue;
@@ -219,7 +221,7 @@ int main(int argc, char **argv)
 
             if (image_view)
             {
-                if (true)
+                if (false)
                 {
                     imshow("frame", image);
                     char key = waitKey(30);
@@ -235,7 +237,5 @@ int main(int argc, char **argv)
                 }
             }
         }
-        loop.sleep();
-        ros::spinOnce();
     }
 }
