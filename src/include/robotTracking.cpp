@@ -356,9 +356,9 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 		
 		robotSegment(frame, color_mask);//mask for red and green region 
 
-		std::vector<RotatedRect> detect_rects = findBox(color_mask);//find contours will destory the image 
+		robot_rects = findBox(color_mask);//find contours will destory the image 
 
-		if(detect_rects.size() >= 1 && detect_rects.size() <= 10)
+		if(robot_rects.size() >= 1 && robot_rects.size() <= 10)
 		{
 			
 			cvtColor(frame, hsv, COLOR_BGR2HSV);
@@ -369,14 +369,14 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 
 			int eff_detect = 0;
 
-			//cout << "detect: " << detect_rects.size() << endl;
+			//cout << "detect: " << robot_rects.size() << endl;
 
-			for (int i = 0; i < detect_rects.size(); ++i)
+			for (int i = 0; i < robot_rects.size(); ++i)
 			{
-				RotatedRect scaledRoatatedRect = resize_rect( detect_rects[i], 0.8);
+				RotatedRect scaledRoatatedRect = resize_rect( robot_rects[i], 0.3);
 				//remove robots in corner
 				{
-					Point2f center = detect_rects[i].center;
+					Point2f center = robot_rects[i].center;
 					double corner_threshold = 30.0;
 					if( (center.x < corner_threshold) 
 						//|| (center.x < corner_threshold && (center.y > 480 - corner_threshold) ) 
@@ -408,7 +408,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
                 int _vmax = 255;
                 int smin = 50;
 
-                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(150, 256, MAX(_vmin, _vmax)), mask);
+                inRange(hsv, Scalar(0, smin, MIN(_vmin,_vmax)), Scalar(180, 256, MAX(_vmin, _vmax)), mask);
 
                 int ch[] = {0, 0};
                 hue.create(hsv.size(), hsv.depth());
@@ -441,10 +441,8 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 		}
 	}else if(track_state == TRACKING)
 	{
-	 	
-	 	
+ 	 	
  	 	cvtColor(frame, hsv, COLOR_BGR2HSV);	
-        
         int ch[] = {0, 0};
         hue.create(hsv.size(), hsv.depth());
         mixChannels(&hsv, 1, &hue, 1, ch, 1);
@@ -474,7 +472,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	        //waitKey(10);
 
 	        RotatedRect trackBox = CamShift(backproj, trackWindow,
-	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1.0 ));
+	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1));
 	        //cout << "tracking: " << trackWindow << endl;
 
 
@@ -494,12 +492,17 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         if(success_track_cnt <= 0)
         {	
         	untracked_cnt++;
-        	//cout << "robot lost:" << endl;
-        	if(untracked_cnt >= 5)
+        	cout << "robot lost:" << endl;
+        	track_state = DETECTING;
+        	if(untracked_cnt >= 1)
         	{
-        		track_state = DETECTING;
+        		//track_state = DETECTING;
         	}
         	
+        }else
+        {
+
+        	cout << "tracked at least one" << endl;
         }
        
 	}

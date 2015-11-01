@@ -139,7 +139,7 @@ int main(int argc, char **argv)
 
             if (image_q[0].first > odom_set.rbegin()->first)
             {
-                puts("wait for odom");
+                //puts("wait for odom");
                 continue;
             }
 
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 
 
             bool succ = false;
-            const int buffer_size = 10;
+            const int buffer_size = 5;
 
             if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
@@ -223,7 +223,7 @@ int main(int argc, char **argv)
 
             if (image_view)
             {
-                if (false)
+                if (true)
                 {
                     imshow("frame", image);
                     char key = waitKey(30);
