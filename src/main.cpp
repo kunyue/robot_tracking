@@ -18,12 +18,10 @@ using namespace Eigen;
 
 ros::Time tImage;
 cv::Mat image, frame, dst;
-bool image_ready = false;
 deque<pair<double,cv::Mat> > image_q;
 
 void image_callback(const sensor_msgs::Image::ConstPtr &msg)
 {
-    image_ready = true;
     tImage = msg->header.stamp;
     image  = cv_bridge::toCvCopy(msg, string("bgr8"))->image;
     image_q.push_back(make_pair(msg->header.stamp.toSec(), image));
@@ -74,6 +72,7 @@ Vector3d get_robot_position(Vector3d position)
     return POS_W;
 }
 
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "ball_track");
@@ -115,7 +114,6 @@ int main(int argc, char **argv)
     {
         vis_pub = it.advertise("vis_img", 1);
     }
-	
 
     //VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 30, Size(640, 480));
 
@@ -241,7 +239,5 @@ int main(int argc, char **argv)
                 }
             }
         }
-        loop.sleep();
-        ros::spinOnce();
     }
 }
