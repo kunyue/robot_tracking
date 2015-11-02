@@ -15,7 +15,8 @@ void drawrect(Mat& img, RotatedRect rect, Scalar color);
 void rect_to_contour(RotatedRect rect, std::vector<Point>& contour);
 //Rect maxRect(RotatedRect rect);
 
-RotatedRect resize_rect(RotatedRect rect, double scale);
+RotatedRect resize_rotatedrect(RotatedRect rect, double scale);
+Rect resize_rect(Rect rect, double scale);
 
 template<class TYPE>
 double angle(TYPE p1, TYPE p2)

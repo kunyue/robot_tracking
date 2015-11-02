@@ -81,7 +81,7 @@ void rect_to_contour(RotatedRect rect, std::vector<Point>& contour)
 // }
 
 
-RotatedRect resize_rect(RotatedRect rect, double scale)
+RotatedRect resize_rotatedrect(RotatedRect rect, double scale)
 {
 	double width = rect.size.width*scale;
 	double height = rect.size.height*scale;
@@ -90,8 +90,13 @@ RotatedRect resize_rect(RotatedRect rect, double scale)
 	return r;
 }
 
-Rect RotatedRect_to_rect(RotatedRect rect)
-{
-	
 
+Rect resize_rect(Rect rect, double scale)
+{
+	Rect r;
+	r.x = rect.x - (rect.width*(scale -1.0) )/2;
+	r.y = rect.y - (rect.height*(scale-1.0)) /2;
+	r.width = rect.width*scale;
+	r.height = rect.height*scale;
+	return r;
 }

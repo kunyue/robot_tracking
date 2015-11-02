@@ -105,6 +105,13 @@ int main(int argc, char **argv)
     n.param("invalid_pos_x", invalid_pos_x, -1.0);
     n.param("invalid_pos_y", invalid_pos_y, -1.0);
     n.param("invalid_pos_z", invalid_pos_z, -1.0);
+    
+    bool publish_image_view;
+    n.param("publish_image_view", publish_image_view, true);
+
+    int velo_calc_buffer_size = 0;
+    n.getParam("velo_calc_buffer_size", velo_calc_buffer_size);
+    ROS_ASSERT(velo_calc_buffer_size>0);
 
 
     image_transport::ImageTransport it(n);
@@ -115,7 +122,7 @@ int main(int argc, char **argv)
         vis_pub = it.advertise("vis_img", 1);
     }
 
-    //VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 30, Size(640, 480));
+    //VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 20, Size(640, 480));
 
     init_rotation();
     ros::Rate loop(600);
@@ -126,7 +133,7 @@ int main(int argc, char **argv)
         ros::spinOnce();
         if (image_q.size())
         {
-            // vw << image;
+            //vw << image;
             if (odom_set.size() == 0)
                 continue;
 
@@ -167,7 +174,6 @@ int main(int argc, char **argv)
 
 
             bool succ = false;
-            const int buffer_size = 5;
 
             if (robotPosition.size() >= 1 && pos_body.z() > 0.3)
             {
@@ -177,10 +183,10 @@ int main(int argc, char **argv)
 
                 ROS_INFO("robot pose: %f %f %f", rob_pos.x(), rob_pos.y(), rob_pos.z());
 
-                if(robot_p_q.size() >= buffer_size)
+                if(robot_p_q.size() >= velo_calc_buffer_size)
                 {
-                    double dt = tImage.toSec() - robot_p_q[robot_p_q.size() - buffer_size].first;
-                    Vector3d dp = rob_pos - robot_p_q[robot_p_q.size() - buffer_size].second;
+                    double dt = tImage.toSec() - robot_p_q[robot_p_q.size() - velo_calc_buffer_size].first;
+                    Vector3d dp = rob_pos - robot_p_q[robot_p_q.size() - velo_calc_buffer_size].second;
 
                     Eigen::Vector3d head_ori = dp / dt;
                     double head_angle = atan2(head_ori.y(), head_ori.x());
@@ -219,24 +225,21 @@ int main(int argc, char **argv)
                 robot.pose.orientation.w = 1;
             }
             p1.publish(robot);
-            //printf("whole_t %f\n", (clock() - whole_t) / CLOCKS_PER_SEC);
+            printf("whole_t %f\n", (clock() - whole_t) / CLOCKS_PER_SEC);
 
             if (image_view)
             {
-                if (true)
+                imshow("frame", image);
+                char key = waitKey(30);
+                if (key == 27)
                 {
-                    imshow("frame", image);
-                    char key = waitKey(30);
-                    if (key == 27)
-                    {
-                        break;
-                    }
+                    break;
                 }
-                if (true)
-                {
-                    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
-                    vis_pub.publish(msg);
-                }
+            }
+            if (publish_image_view)
+            {
+                sensor_msgs::ImagePtr msg = cv_bridge::CvImage(robot.header, "bgr8", image).toImageMsg();
+                vis_pub.publish(msg);
             }
         }
     }

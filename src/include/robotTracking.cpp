@@ -22,15 +22,19 @@ using Eigen::Vector3d;
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
 //#define EDGE_BASED 0//1 edge based; color based method 
 
-#define EFF_AREA_MIN_THRESHOLD 120.0
-#define EFF_AREA_MAX_THRESHOLD 5000.0
-#define MIN_AXIS_RATIO 1.05
-#define MAX_AXIS_RATIO 4.0
+#define EFF_AREA_MIN_THRESHOLD 80.0
+#define EFF_AREA_MAX_THRESHOLD 10000.0//5000.0
+#define MIN_AXIS_RATIO 1.2
+#define MAX_AXIS_RATIO 5.0
 #define OUTLIER_THRESHOLD 800.0
 
 #define EFF_ROBOT_THRESHOLD 5
 #define OBSERVE_HISTORY_LEN 10 //observe_history_len
 
+
+
+#define RED_ROBOT 255
+#define GREEN_ROBOT 122
 
 const Scalar RED = Scalar(0,0,255);
 const Scalar PINK = Scalar(230,130,255);
@@ -54,7 +58,9 @@ vector< RotatedRect > findBox(Mat& bwImg);
 
 vector<Point2f> shape_center(std::vector< RotatedRect >& contours);
 std::vector<Eigen::VectorXd> robot_pos_dir(vector< Point2f >& shape_centers, std::vector<Point2f>& robot_directions);
-bool effitive_box(Rect rect);
+bool effitive_detect_box(RotatedRect rect);
+bool effitive_track_box(RotatedRect rect);
+
 
 cv::Mat K, distCoeff;
 int image_width, image_height;
@@ -67,28 +73,74 @@ unsigned char colorMap[256/table_scale][256/table_scale][256/table_scale];
 //calibration parameter for cetacamera
 double m_xi, m_k1, m_k2, m_p1, m_p2, m_gamma1, m_gamma2, m_u0, m_v0; 
 
-bool effitive_box(Rect rect)
+bool effitive_detect_box(RotatedRect rect)
 {
+	Point2f vertices[4];
+	rect.points(vertices);
+	double len1 = distance(vertices[0], vertices[1]);
+	double len2 = distance(vertices[1], vertices[2]);
+	double long_axis = max(len1, len2);
+	double short_axis = min(len1, len2);
 	
-	double area = rect.area();
+	double area = long_axis*short_axis;
 	if(area < EFF_AREA_MIN_THRESHOLD || area > EFF_AREA_MAX_THRESHOLD)
 	{
-		//cout << "area: " << area << endl;
+		//cout << "area 1: " << area << endl;
 		return false;
 	}
 
-
-
-	Point2f vertices[4];
-	double len1 = rect.width;
-	double len2 = rect.height;
-	double long_axis = max(len1, len2);
-	double short_axis = min(len1, len2);
 	double ratio = long_axis/short_axis;
-
 	if(ratio < MIN_AXIS_RATIO || ratio > MAX_AXIS_RATIO)
 	{
 		//cout << "ratio: " << ratio << endl;
+		return false;
+	}
+
+	Point2f center = rect.center;
+	double corner_threshold = 50;
+	if(center.x < corner_threshold || corner_threshold > (image_width - corner_threshold))
+	{
+		//cout << "robot at corner " << endl;
+		return false;
+	}
+	return true;
+}
+
+
+bool effitive_track_box(RotatedRect rect)
+{
+	
+	double _EFF_AREA_MIN_THRESHOLD =  50;//80.0
+	double _EFF_AREA_MAX_THRESHOLD =  10000.0;//5000.0
+	double _MIN_AXIS_RATIO  = 1.05;
+	double _MAX_AXIS_RATIO  = 6.0;
+	
+	Point2f vertices[4];
+	rect.points(vertices);
+	double len1 = distance(vertices[0], vertices[1]);
+	double len2 = distance(vertices[1], vertices[2]);
+	double long_axis = max(len1, len2);
+	double short_axis = min(len1, len2);
+	
+	double area = long_axis*short_axis;
+	if(area < _EFF_AREA_MIN_THRESHOLD || area > _EFF_AREA_MAX_THRESHOLD)
+	{
+		//cout << "area 2: " << area << endl;
+		return false;
+	}
+
+	double ratio = long_axis/short_axis;
+	if(ratio < _MIN_AXIS_RATIO || ratio > _MAX_AXIS_RATIO)
+	{
+		//cout << "ratio: " << ratio << endl;
+		return false;
+	}
+
+	Point2f center = rect.center;
+	double corner_threshold = 50;
+	if(center.x < corner_threshold || corner_threshold > (image_width - corner_threshold))
+	{
+		//cout << "robot at corner " << endl;
 		return false;
 	}
 	return true;
@@ -122,14 +174,18 @@ vector< RotatedRect > findBox(Mat& bwImg)
 			double len2 = distance(vertices[1], vertices[2]);
 			double long_axis = max(len1, len2);
 			double short_axis = min(len1, len2);
-			double ratio = long_axis/short_axis;
+			//double ratio = long_axis/short_axis;
 			double rectArea = long_axis*short_axis;
 			double area_ratio = area/rectArea;
 
-
-			if(ratio < 1.2 || ratio > 3.0 || area_ratio < 0.6)
+			if(area_ratio < 0.6)
 			{
 				continue;
+			}
+
+			if(effitive_detect_box(rect))
+			{
+				rects.push_back(rect);
 			}
 
 			//cout << "ratio: " << ratio << " area_ratio: " << area_ratio << endl;
@@ -140,7 +196,7 @@ vector< RotatedRect > findBox(Mat& bwImg)
 			// }
 			//contour = alignShape(contour);
 			//contoursPoly.push_back(contour);
-			rects.push_back(rect);
+			
 		}
 	}
 
@@ -312,8 +368,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	
 
 	static int track_state = DETECTING;
-	
-    
+
     int hsize = 16;
 
     float hranges[] = {0, 180};//TODO 
@@ -347,9 +402,75 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 	}
 	
 
-	static int untracked_cnt = 0;
+	static int untracked_cnt = 0, track_cnt = 0;
 	//remap( frame, frame, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
 	
+
+	if(track_state == TRACKING)
+	{
+ 	 	
+ 	 	cvtColor(frame, hsv, COLOR_BGR2HSV);	
+        int ch[] = {0, 0};
+        hue.create(hsv.size(), hsv.depth());
+        mixChannels(&hsv, 1, &hue, 1, ch, 1);
+
+        int success_track_cnt = 0;
+        robot_rects.clear();
+
+     	//cout << "tracking: " << hists.size() << endl;
+        for (int i = 0; i < 1/*hists.size()*/; ++i)
+        {
+        	hists[i].copyTo(hist);
+
+        	trackWindow = trackWindows[i]; 
+    		
+    		whiteMask(frame, white_mask);
+    		//imshow("white_mask", white_mask);
+		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
+	        backproj &= white_mask;
+
+
+	        RotatedRect trackBox = CamShift(backproj, trackWindow,
+	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1));
+	        //cout << "tracking: " << trackWindow << endl;
+
+	       
+
+	       // if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD 
+	        //	&& trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
+	        if(effitive_track_box(trackBox))
+	        {
+	        	trackWindows[i] = trackWindow;
+	        	success_track_cnt++;
+        		robot_rects.push_back(trackBox);
+	        }
+
+	        //TODO 
+	        // if(success_track_cnt >= 1)//only track one robot
+	        // {
+	        // 	break;
+	        // }
+	        
+        }
+
+        //cout << "tracked: " << success_track_cnt << endl;
+        if(success_track_cnt <= 0)
+        {	
+        	untracked_cnt++;
+        	cout << "robot lost:" << endl;
+        	track_state = DETECTING;
+        	if(untracked_cnt >= 1)
+        	{
+        		//track_state = DETECTING;
+        	}
+        	
+        }else
+        {
+        	track_cnt++;
+        	//cout << "tracked " << success_track_cnt << "robots" << endl;
+        }
+       
+	}
 
 	if(track_state == DETECTING)
 	{
@@ -368,35 +489,20 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 			trackWindows.clear();
 
 			int eff_detect = 0;
-
 			//cout << "detect: " << robot_rects.size() << endl;
 
 			for (int i = 0; i < robot_rects.size(); ++i)
 			{
-				RotatedRect scaledRoatatedRect = resize_rect( robot_rects[i], 0.3);
-				//remove robots in corner
-				{
-					Point2f center = robot_rects[i].center;
-					double corner_threshold = 30.0;
-					if( (center.x < corner_threshold) 
-						//|| (center.x < corner_threshold && (center.y > 480 - corner_threshold) ) 
-						|| (center.x > (640 - corner_threshold)) )
-					{
-						//cout << "corner removed" << endl;
-						continue;
-					}
-
-				}
+				
+				RotatedRect scaledRoatatedRect = resize_rotatedrect( robot_rects[i], 0.3);
 
 				eff_detect++;	
 				rect_to_contour(scaledRoatatedRect, contour);
 				Rect selection = boundingRect(contour);
 
 				//cout << "selection : " << selection << endl;
-				Scalar color = ColorTable[1];
-				rectangle(frame, selection, color, 1, 8);
+				
 				cvtColor(frame, hsv, COLOR_BGR2HSV);
-
 
 				if(selection.x < 0) selection.x = 0;  
 				if(selection.y < 0) selection.y = 0;
@@ -434,90 +540,28 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 			if(eff_detect >= 1 && eff_detect < 10)
 			{
 				track_state = TRACKING; //TODO 
+				track_cnt = 0;
 				untracked_cnt = 0;
 			}
 		
 
 		}
-	}else if(track_state == TRACKING)
-	{
- 	 	
- 	 	cvtColor(frame, hsv, COLOR_BGR2HSV);	
-        int ch[] = {0, 0};
-        hue.create(hsv.size(), hsv.depth());
-        mixChannels(&hsv, 1, &hue, 1, ch, 1);
-
-        int success_track_cnt = 0;
-        robot_rects.clear();
-
-     	//cout << "tracking: " << hists.size() << endl;
-        for (int i = 0; i < hists.size(); ++i)
-        {
-        	hists[i].copyTo(hist);
-        	trackWindow = trackWindows[i]; 
-    		
-
-    		whiteMask(frame, white_mask);
-    		//imshow("white_mask", white_mask);
-		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
-	        backproj &= white_mask;
-
-
-	        //backproj.dot(color_mask); //TODO 
-	        //backproj &= color_mask;
-		 	//backproj = color_mask;
-	        //cout << "backproj: " << backproj.row(1) << endl;
-
-	        //imshow("backproj", backproj);
-	        //waitKey(10);
-
-	        RotatedRect trackBox = CamShift(backproj, trackWindow,
-	                            TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1));
-	        //cout << "tracking: " << trackWindow << endl;
-
-
-	       // if( trackWindow.area() >= EFF_AREA_MIN_THRESHOLD 
-	        //	&& trackWindow.area() <= EFF_AREA_MAX_THRESHOLD)
-	        if(effitive_box(trackWindow))
-	        {
-
-	        	success_track_cnt++;
-        		trackWindows[i] = trackWindow;
-        		robot_rects.push_back(trackBox);
-	        }
-	        
-        }
-
-        //cout << "tracked: " << success_track_cnt << endl;
-        if(success_track_cnt <= 0)
-        {	
-        	untracked_cnt++;
-        	cout << "robot lost:" << endl;
-        	track_state = DETECTING;
-        	if(untracked_cnt >= 1)
-        	{
-        		//track_state = DETECTING;
-        	}
-        	
-        }else
-        {
-
-        	cout << "tracked at least one" << endl;
-        }
-       
 	}
-	
-
-	std::vector<Point2f> shape_centers = shape_center(robot_rects);
-	//robotPose = normalized_robot_pose(shape_centers);
-	robotPose = cetaUndistPoint(shape_centers);
 
 	for (unsigned int i = 0; i < robot_rects.size(); i++)
 	{
 		Scalar color = ColorTable[i%COLOR_CNT];
 		drawrect(frame, robot_rects[i], color);
 	}
-	
+
+
+	if(track_cnt >= 1)
+	{
+		std::vector<Point2f> shape_centers = shape_center(robot_rects);
+		//robotPose = normalized_robot_pose(shape_centers);
+		robotPose = cetaUndistPoint(shape_centers);
+	}
+
 	return robotPose;
 }
 
@@ -632,28 +676,26 @@ int svmInit(char*  filename1, char* filename2)
 				tmp31 = tmp21 + sv_green.at<double>(2)*k + sv_green.at<double>(5)*k*k;
 				tmp32 = tmp22 + sv_red.at<double>(2)*k + sv_red.at<double>(5)*k*k;
 				
-				//TODO, I don't understant
-				if(tmp31 < 0.0 || tmp32 < 0.0)
+				//TODO
+				// if(tmp31 < 0.0 || tmp32 < 0.0)
+				// {
+				// 	colorMap[i/table_scale][j/table_scale][k/table_scale] = 255;
+				// }else 
+				// {
+				// 	colorMap[i/table_scale][j/table_scale][k/table_scale] = 0;
+				// }
+				if(tmp31 < 0.0 )
 				{
-					colorMap[i/table_scale][j/table_scale][k/table_scale] = 255;
-				}else 
+					colorMap[i/table_scale][j/table_scale][k/table_scale] = RED_ROBOT;
+				}else if(tmp32 < 0.0)
+				{
+					colorMap[i/table_scale][j/table_scale][k/table_scale] = GREEN_ROBOT;
+				}
+				else 
 				{
 					colorMap[i/table_scale][j/table_scale][k/table_scale] = 0;
 				}
 				
-//				m.at<float>(2) = k;
-//				m.at<float>(5) = (float)k*k;
-//				float response_red = svm_red->predict(m.t());
-//				float response_green = svm_green->predict(m.t());
-//				
-//				cout << tmp31 << " " << tmp32 << " " << response_green << " " << response_red << 	 endl;				
-//				if(response_red == 1 || response_green == 1)
-//				{
-//					colorMap[i/table_scale][j/table_scale][k/table_scale] = 255;
-//				}else
-//				{
-//					colorMap[i/table_scale][j/table_scale][k/table_scale] = 0;
-//				}
 			}
 		}
 	} 
@@ -718,15 +760,15 @@ void robotSegment(Mat& frame, Mat& mask)
 	for (unsigned int i = 0; i < frame.rows; i++)
 	{
 		
-		//p = (unsigned char*)(frame.data + i*frame.step);
+		p = (unsigned char*)(frame.data + i*frame.step);
 
 		for (unsigned int j = 0; j < frame.cols; j++)
 		{
-			Vec3b p = frame.at<Vec3b>(i, j);
+			//Vec3b p = frame.at<Vec3b>(i, j);
 			id1 = p[0]/table_scale;
 			id2 = p[1]/table_scale;
 			id3 = p[2]/table_scale;
-			//p += 3;
+			p += 3;
 			//cout << "id: " << id1 << " " << id2 << "  " << id3 << endl;
 			mask.at<unsigned char>(i, j) = colorMap[id1][id2][id3];
 		}
@@ -848,12 +890,16 @@ void whiteMask(Mat& frame, Mat& mask)
 	{
 		mask = Mat::zeros(frame.rows, frame.cols, CV_8UC1);
 	}
+	unsigned char* bgr = NULL;
 
 	for (int i = 0; i < frame.rows; ++i)
 	{
+		bgr = (unsigned char*)(frame.data + i*frame.step);
+
 		for(int j = 0; j < frame.cols; j++)
 		{
-			Vec3b bgr = frame.at<Vec3b>(i, j);
+			//Vec3b bgr = frame.at<Vec3b>(i, j);
+			
 			if(bgr[0]  > 100 && bgr[1] > 100 && bgr[2] > 100)
 			{
 				mask.at<unsigned char>(i, j) = 0;
@@ -861,6 +907,7 @@ void whiteMask(Mat& frame, Mat& mask)
 			{
 				mask.at<unsigned char>(i, j) = 255;
 			}
+			bgr += 3;
 		}
 	}
 }

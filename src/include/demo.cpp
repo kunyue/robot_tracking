@@ -70,7 +70,7 @@ int main(int argc, char** argv)
 		//2. track
 		//robotPosition = robotTrack(frame);
 		robotPosition = camshiftTrack(frame);
-			//cout << robotPosition.size() << " robotPos: " << "\n";
+		cout << robotPosition.size() << " robotPos: " << "\n";
 		for (unsigned int i = 0; i < robotPosition.size(); i++)
 		{
 			//cout << robotPosition[i].transpose() <<  endl;

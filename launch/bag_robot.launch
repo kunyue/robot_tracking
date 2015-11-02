@@ -2,9 +2,10 @@
     <node pkg="robot_tracking" type="robot_tracking" name="robot_tracking" output="screen">
         <remap from="~image" to="/color_camera/image_raw"/>
         <remap from="~odom"  to="/odom"/>
-        <param name="cam_cal_file" type="string" value="$(find robot_tracking)/config/camera_binning.yml"/>
+        <param name="cam_cal_file" type="string" value="$(find robot_tracking)/config/camera_camera_calib_mei.yaml"/>
         <param name="red_thr_file" type="string" value="$(find robot_tracking)/config/color_red_bluefox.yml"/>
         <param name="green_thr_file" type="string" value="$(find robot_tracking)/config/color_green_bluefox.yml"/>
+        <param name="velo_calc_buffer_size" type="int" value="20"/>
         <param name="show_image" type="bool" value="true"/>
     </node>
 </launch>
