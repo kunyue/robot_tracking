@@ -19,6 +19,7 @@ message(STATUS "    libraries: ${OpenCV_LIBS}")
 message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "    lib path: ${OpenCV_LIB_DIR}")
 
+include_directories("camera_models")
 add_executable( robotTracking demo.cpp robotTracking.cpp util.cpp)
 
 target_link_libraries( robotTracking ${OpenCV_LIBS} )
