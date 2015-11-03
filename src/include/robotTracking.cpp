@@ -98,7 +98,7 @@ bool effitive_detect_box(RotatedRect rect)
 
 	Point2f center = rect.center;
 	double corner_threshold = 50;
-	if(center.x < corner_threshold || corner_threshold > (image_width - corner_threshold))
+	if(center.x < corner_threshold || center.x > (image_width - corner_threshold))
 	{
 		//cout << "robot at corner " << endl;
 		return false;
@@ -138,7 +138,7 @@ bool effitive_track_box(RotatedRect rect)
 
 	Point2f center = rect.center;
 	double corner_threshold = 50;
-	if(center.x < corner_threshold || corner_threshold > (image_width - corner_threshold))
+	if(center.x < corner_threshold || center.x > (image_width - corner_threshold))
 	{
 		//cout << "robot at corner " << endl;
 		return false;
