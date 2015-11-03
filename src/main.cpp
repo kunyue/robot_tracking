@@ -117,7 +117,7 @@ int main(int argc, char **argv)
     image_transport::ImageTransport it(n);
     image_transport::Publisher vis_pub;
     
-    if (image_view)
+    if (publish_image_view)
     {
         vis_pub = it.advertise("vis_img", 1);
     }
