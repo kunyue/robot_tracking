@@ -122,7 +122,7 @@ int main(int argc, char **argv)
         vis_pub = it.advertise("vis_img", 1);
     }
 
-    //VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 20, Size(640, 480));
+    VideoWriter vw("/home/libing/vw.avi", CV_FOURCC('M', 'J', 'P', 'G'), 20, Size(640, 480));
 
     init_rotation();
     ros::Rate loop(600);
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
         ros::spinOnce();
         if (image_q.size())
         {
-            //vw << image;
+            vw << image;
             if (odom_set.size() == 0)
                 continue;
 
