@@ -786,7 +786,6 @@ void hsvTableInit()
 				{
 					is_green = false;
 				}
-
 				if(is_red || is_green)
 				{
 					colorMap[h/table_scale][s/table_scale][v/table_scale] = 255;
