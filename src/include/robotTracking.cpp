@@ -432,7 +432,7 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
         	trackWindow = trackWindows[i]; 
     		
     		whiteMask(frame, white_mask);
-    		//imshow("white_mask", white_mask);
+    		imshow("white_mask", white_mask);
 		 	calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 	        backproj &= white_mask;
 
@@ -956,7 +956,7 @@ void whiteMask(Mat& frame, Mat& mask)
 		{
 			//Vec3b bgr = frame.at<Vec3b>(i, j);
 			
-			if(bgr[0]  > 100 && bgr[1] > 100 && bgr[2] > 100)
+			if(bgr[0]  > 130 && bgr[1] > 70 && bgr[2] > 70)
 			{
 				mask.at<unsigned char>(i, j) = 0;
 			}else 
