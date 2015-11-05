@@ -22,6 +22,8 @@ using Eigen::Vector3d;
 #define EDGE_METHOD 2 //0 hsv canny, 1 all channel canny; 2, RGB canny; 3, R G canny, 4, grayscale canny 5, R channel
 //#define EDGE_BASED 0//1 edge based; color based method 
 
+#define HSV_MODE 1
+
 #define EFF_AREA_MIN_THRESHOLD 80.0
 #define EFF_AREA_MAX_THRESHOLD 10000.0//5000.0
 #define MIN_AXIS_RATIO 1.2
@@ -67,7 +69,7 @@ int image_width, image_height;
 cv::Mat map1, map2; //for undistortion
 
 
-const int table_scale = 2; 
+const int table_scale = 1; 
 unsigned char colorMap[256/table_scale][256/table_scale][256/table_scale];
 
 //calibration parameter for cetacamera
@@ -324,9 +326,14 @@ vector< vector<Point> > robotDetect(cv::Mat &frame/*, cv::Mat& K, cv::Mat& distC
 int robotTrackInit(char* calib_filename, char* green_svm_filename, char* red_svm_filename) 
 {
 
-	int ret1 =  svmInit(green_svm_filename, red_svm_filename);
-	//int ret1 = 0;
-	//colorTableInit(); //TODO
+	//int ret1 =  svmInit(green_svm_filename, red_svm_filename);
+	int ret1 = 0;
+	#if HSV_MODE
+	hsvTableInit(); //TODO
+	#else 
+	colorTableInit(); //TODO
+	#endif
+	
 	//int ret2 = calibInit(calib_filename);
 	int ret2 = readCetaCamera(calib_filename);
 
@@ -474,8 +481,16 @@ std::vector<Eigen::Vector3d> camshiftTrack(Mat& frame)
 
 	if(track_state == DETECTING)
 	{
-		
+		#if HSV_MODE
+		cvtColor(frame, hsv, CV_BGR2HSV);
+		robotSegment(hsv, color_mask);//mask for red and green region 
+		#else 
 		robotSegment(frame, color_mask);//mask for red and green region 
+		#endif
+
+		
+
+		imshow("color_mask", color_mask);
 
 		robot_rects = findBox(color_mask);//find contours will destory the image 
 
@@ -736,6 +751,47 @@ void colorTableInit()
 				}else 
 				{
 					colorMap[b/table_scale][g/table_scale][r/table_scale] = 0;
+				}
+
+			}
+		}
+	} 
+}
+
+void hsvTableInit()
+{
+	bool is_red = false, is_green = false;
+
+	for (unsigned int h = 0; h < 256; h += table_scale)
+	{		
+
+		for (unsigned int s = 0; s < 256; s += table_scale)
+		{
+					
+			for (unsigned int v = 0; v < 256; v += table_scale)
+			{
+				if((h < 60 || h > 130) && s > 55 && v > 55) 
+				{
+					is_red = true;
+				}else
+				{
+					is_red = false;
+				}
+
+				// if( (b > 30 && b < 80) && (g > 40 && g < 100) && (r > 10 && r < 50) )
+				// {
+				// 	is_green = true;
+				// }else 
+				// {
+				// 	is_green = false;
+				// }
+
+				if(is_red || is_green)
+				{
+					colorMap[h/table_scale][s/table_scale][v/table_scale] = 255;
+				}else 
+				{
+					colorMap[h/table_scale][s/table_scale][v/table_scale] = 0;
 				}
 
 			}
