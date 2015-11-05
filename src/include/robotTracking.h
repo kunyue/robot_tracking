@@ -33,6 +33,7 @@ int readCetaCamera(const std::string& filename);
  vector<Eigen::Vector3d> cetaUndistPoint(std::vector<Point2f>& points);
  
  void colorTableInit();
+ void hsvTableInit();
  
  void whiteMask(Mat& frame, Mat& mask);
 

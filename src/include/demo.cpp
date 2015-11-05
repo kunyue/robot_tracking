@@ -47,7 +47,7 @@ int main(int argc, char** argv)
 	Mat frame, hsv;
 	std::vector<Mat> _hsv, bgr;
     //VideoCapture cap("/home/libing/irobot_2015-10-27-23-05-33.avi"); 
-    VideoCapture cap("/home/libing/vw.avi"); 
+    VideoCapture cap("/home/libing/irobot_pre_train_2015-11-05-09-18-08.avi"); 
    
    
     if ( !cap.isOpened()  )  // if not success, exit program
