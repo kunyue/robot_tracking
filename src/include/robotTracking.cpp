@@ -26,7 +26,7 @@ using Eigen::Vector3d;
 
 #define EFF_AREA_MIN_THRESHOLD 80.0
 #define EFF_AREA_MAX_THRESHOLD 10000.0//5000.0
-#define MIN_AXIS_RATIO 1.2
+#define MIN_AXIS_RATIO 1.05
 #define MAX_AXIS_RATIO 5.0
 #define OUTLIER_THRESHOLD 800.0
 
@@ -770,8 +770,8 @@ void hsvTableInit()
 					
 			for (unsigned int v = 0; v < 256; v += table_scale)
 			{
-				// if((h < 60 || h > 130) && s > 55 && v > 55) //old
-				if((h < 45 || h > 210) && s > 140 && v > 110) //red
+				if((h < 60 || h > 130) && s > 55 && v > 55) //old
+				// if((h < 45 || h > 210) && s > 140 && v > 110) //red
 				{
 					is_red = true;
 				}else
@@ -779,13 +779,13 @@ void hsvTableInit()
 					is_red = false;
 				}
 
-				if((h > 34 && h < 70) && (s > 150 && s < 200) && (v > 50 && v < 80))
-				{
-					is_green = true;
-				}else 
-				{
-					is_green = false;
-				}
+				// if((h > 34 && h < 70) && (s > 150 && s < 200) && (v > 50 && v < 80))
+				// {
+				// 	is_green = true;
+				// }else 
+				// {
+				// 	is_green = false;
+				// }
 				if(is_red || is_green)
 				{
 					colorMap[h/table_scale][s/table_scale][v/table_scale] = 255;
@@ -956,8 +956,8 @@ void whiteMask(Mat& frame, Mat& mask)
 		{
 			//Vec3b bgr = frame.at<Vec3b>(i, j);
 			
-			//if(bgr[0]  > 130 && bgr[1] > 70 && bgr[2] > 70)//old
-			if(bgr[0]  > 65 && bgr[1] > 150 && bgr[2] > 70)//old
+			if(bgr[0]  > 135 && bgr[1] > 75 && bgr[2] > 75)//old
+			// if(bgr[0]  > 65 && bgr[1] > 150 && bgr[2] > 70)//old
 			{
 				mask.at<unsigned char>(i, j) = 0;
 			}else 
